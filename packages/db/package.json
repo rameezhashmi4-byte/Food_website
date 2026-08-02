@@ -1,0 +1,19 @@
+{
+  "name": "@bitejoy/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "preseed": "npm run build -w @bitejoy/core",
+    "seed": "tsx seed/seedFictionalData.ts"
+  },
+  "dependencies": {
+    "@bitejoy/core": "*",
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
