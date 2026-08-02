@@ -15,7 +15,8 @@ describe("surprise_me tool", () => {
     for (let i = 0; i < 5; i += 1) {
       const result = await harness.client.callTool({
         name: "surprise_me",
-        arguments: { location: "Croydon", radiusKm: 20, dietaryNeeds: ["vegan"], budgetPerPersonGbp: 20 },
+        // Pinned to 1pm so this doesn't depend on which vegan-friendly fixtures happen to be open right now.
+        arguments: { location: "Croydon", radiusKm: 20, dietaryNeeds: ["vegan"], budgetPerPersonGbp: 20, dateTime: "1pm" },
       });
       expect(result.isError).toBeFalsy();
       const structured = result.structuredContent as { recommendation: RestaurantCardView };

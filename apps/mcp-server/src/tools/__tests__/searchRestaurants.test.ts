@@ -36,9 +36,10 @@ describe("search_restaurants tool", () => {
     expect(text && text.type === "text" ? text.text : "").not.toMatch(/database|query|records/i);
   });
 
-  it("rejects a request with no location", async () => {
+  it("reports a request with no location as a clean tool error", async () => {
     harness = await createConnectedTestClient();
-    await expect(harness.client.callTool({ name: "search_restaurants", arguments: { partySize: 2 } })).rejects.toThrow();
+    const result = await harness.client.callTool({ name: "search_restaurants", arguments: { partySize: 2 } });
+    expect(result.isError).toBe(true);
   });
 
   it("returns a clear, non-crashing error for an unrecognised location", async () => {

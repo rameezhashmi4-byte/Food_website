@@ -11,7 +11,11 @@ describe("find_new_openings tool", () => {
 
   it("only returns restaurants marked as recently opened", async () => {
     harness = await createConnectedTestClient();
-    const result = await harness.client.callTool({ name: "find_new_openings", arguments: { location: "Croydon", radiusKm: 20 } });
+    // Crumb & Co. is open every day 08:00-15:30; pinning to 1pm keeps this independent of when the suite runs.
+    const result = await harness.client.callTool({
+      name: "find_new_openings",
+      arguments: { location: "Croydon", radiusKm: 20, dateTime: "1pm" },
+    });
 
     expect(result.isError).toBeFalsy();
     const structured = result.structuredContent as { recommendations: RestaurantCardView[] };

@@ -41,8 +41,9 @@ describe("understand_food_request tool", () => {
     expect(structured.missingEssential).toMatch(/whereabouts/i);
   });
 
-  it("rejects input that doesn't match the schema", async () => {
+  it("reports input that doesn't match the schema as a clean tool error", async () => {
     harness = await createConnectedTestClient();
-    await expect(harness.client.callTool({ name: "understand_food_request", arguments: { message: "" } })).rejects.toThrow();
+    const result = await harness.client.callTool({ name: "understand_food_request", arguments: { message: "" } });
+    expect(result.isError).toBe(true);
   });
 });

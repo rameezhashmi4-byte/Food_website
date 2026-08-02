@@ -5,6 +5,9 @@ import { distanceKm } from "../utils/geo.js";
 import { isOpenAt } from "../utils/hours.js";
 import { isOfferActive } from "../types/restaurant.js";
 
+/** A restaurant with this many reviews or more is mainstream by definition, never a "hidden gem". */
+const HIDDEN_GEM_MAX_REVIEW_COUNT = 500;
+
 export interface HardFilterResult {
   passes: boolean;
   failedReasons: string[];
@@ -63,9 +66,15 @@ export function checkHardFilters(
 
   // "Hidden gem" is a promise, not just a scoring lean: every result must
   // actually be independent, however thin the candidate pool is at the
-  // requested time (e.g. late at night, when few places are even open).
-  if (mode === "hidden_gem" && !restaurant.isIndependent) {
-    failedReasons.push("not_independent");
+  // requested time (e.g. late at night, when few places are even open) -
+  // and a restaurant with hundreds of reviews is mainstream by definition,
+  // however that stacks up against whatever else happens to be open right
+  // now, so it's excluded outright rather than merely down-weighted.
+  if (mode === "hidden_gem") {
+    if (!restaurant.isIndependent) failedReasons.push("not_independent");
+    if ((restaurant.reviewSummary?.reviewCount ?? 0) >= HIDDEN_GEM_MAX_REVIEW_COUNT) {
+      failedReasons.push("too_mainstream");
+    }
   }
 
   return { passes: failedReasons.length === 0, failedReasons };

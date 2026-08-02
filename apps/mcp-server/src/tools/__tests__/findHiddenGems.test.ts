@@ -11,7 +11,11 @@ describe("find_hidden_gems tool", () => {
 
   it("only returns well-rated, independent restaurants and excludes the most mainstream one", async () => {
     harness = await createConnectedTestClient();
-    const result = await harness.client.callTool({ name: "find_hidden_gems", arguments: { location: "Croydon", radiusKm: 20 } });
+    // Pinned to a time when plenty of independent fixtures are open, regardless of what day/hour the suite actually runs at.
+    const result = await harness.client.callTool({
+      name: "find_hidden_gems",
+      arguments: { location: "Croydon", radiusKm: 20, dateTime: "7pm" },
+    });
 
     expect(result.isError).toBeFalsy();
     const structured = result.structuredContent as { recommendations: RestaurantCardView[] };

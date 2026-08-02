@@ -22,11 +22,13 @@ describe("compare_restaurants tool", () => {
     expect(structured.bestOverallMatch).toBeDefined();
   });
 
-  it("rejects fewer than 2 restaurant ids", async () => {
+  it("reports fewer than 2 restaurant ids as a clean tool error", async () => {
     harness = await createConnectedTestClient();
-    await expect(
-      harness.client.callTool({ name: "compare_restaurants", arguments: { restaurantIds: ["r_flame_fork"], location: "Croydon" } }),
-    ).rejects.toThrow();
+    const result = await harness.client.callTool({
+      name: "compare_restaurants",
+      arguments: { restaurantIds: ["r_flame_fork"], location: "Croydon" },
+    });
+    expect(result.isError).toBe(true);
   });
 
   it("returns a clear error for an unknown restaurant id among the requested ones", async () => {

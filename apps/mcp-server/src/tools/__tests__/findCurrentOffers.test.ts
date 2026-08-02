@@ -11,7 +11,11 @@ describe("find_current_offers tool", () => {
 
   it("only returns restaurants with a currently valid, sourced offer", async () => {
     harness = await createConnectedTestClient();
-    const result = await harness.client.callTool({ name: "find_current_offers", arguments: { location: "Croydon", radiusKm: 20 } });
+    // Pinned to a time when the offer-bearing fixtures are open, regardless of what day/hour the suite actually runs at.
+    const result = await harness.client.callTool({
+      name: "find_current_offers",
+      arguments: { location: "Croydon", radiusKm: 20, dateTime: "7pm" },
+    });
 
     expect(result.isError).toBeFalsy();
     const structured = result.structuredContent as { recommendations: RestaurantCardView[] };

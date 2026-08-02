@@ -8,20 +8,29 @@ describe("MCP-level error handling", () => {
     await harness?.close();
   });
 
-  it("rejects a call to an unknown tool rather than crashing the server", async () => {
+  it("reports an unknown tool as a clean tool error rather than crashing the server", async () => {
     harness = await createConnectedTestClient();
-    await expect(harness.client.callTool({ name: "not_a_real_tool", arguments: {} })).rejects.toThrow();
+    // MCP reports tool-call failures (including "no such tool") as a normal
+    // result with isError:true, not a protocol-level rejection - that's what
+    // lets the model see and react to the error mid-conversation.
+    const result = await harness.client.callTool({ name: "not_a_real_tool", arguments: {} });
+    expect(result.isError).toBe(true);
 
     // The server must still be usable afterwards.
     const stillWorks = await harness.client.callTool({ name: "get_restaurant_details", arguments: { restaurantId: "r_flame_fork" } });
     expect(stillWorks.isError).toBeFalsy();
   });
 
-  it("rejects arguments of the wrong type instead of silently coercing them", async () => {
+  it("reports arguments of the wrong type as a clean tool error instead of silently coercing them", async () => {
     harness = await createConnectedTestClient();
-    await expect(
-      harness.client.callTool({ name: "search_restaurants", arguments: { location: "Croydon", partySize: "four" } }),
-    ).rejects.toThrow();
+    const result = await harness.client.callTool({
+      name: "search_restaurants",
+      arguments: { location: "Croydon", partySize: "four" },
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content?.[0];
+    const message = text && text.type === "text" ? text.text : "";
+    expect(message.length).toBeGreaterThan(0);
   });
 
   it("never leaks a stack trace or internal file path in a business-logic error", async () => {
