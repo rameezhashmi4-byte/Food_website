@@ -16,7 +16,17 @@ import { COMPARE_RESTAURANTS_SYSTEM_PROMPT, buildCompareRestaurantsUserPrompt } 
  * verified data to rephrase - never asked to originate new facts.
  */
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+const IS_GPT_56 = MODEL.startsWith("gpt-5.6");
+
+/**
+ * GPT-5.6 accepts only the default temperature. Preserve this app's former
+ * non-reasoning, low-latency behaviour explicitly instead. Older models keep
+ * their existing sampling configuration.
+ */
+function modelParameters(temperature: number) {
+  return IS_GPT_56 ? { reasoning_effort: "none" as const } : { temperature };
+}
 
 let cachedClient: OpenAI | undefined;
 
@@ -56,7 +66,7 @@ export async function refineCriteriaWithAI(message: string): Promise<AiExtractab
   try {
     const response = await openai.chat.completions.create({
       model: MODEL,
-      temperature: 0,
+      ...modelParameters(0),
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: EXTRACT_CRITERIA_SYSTEM_PROMPT },
@@ -81,7 +91,7 @@ export async function explainRecommendationsWithAI(cardsJson: unknown): Promise<
   try {
     const response = await openai.chat.completions.create({
       model: MODEL,
-      temperature: 0.4,
+      ...modelParameters(0.4),
       messages: [
         { role: "system", content: EXPLAIN_RECOMMENDATIONS_SYSTEM_PROMPT },
         { role: "user", content: buildExplainRecommendationsUserPrompt(cardsJson) },
@@ -101,7 +111,7 @@ export async function compareRestaurantsWithAI(comparisonJson: unknown): Promise
   try {
     const response = await openai.chat.completions.create({
       model: MODEL,
-      temperature: 0.4,
+      ...modelParameters(0.4),
       messages: [
         { role: "system", content: COMPARE_RESTAURANTS_SYSTEM_PROMPT },
         { role: "user", content: buildCompareRestaurantsUserPrompt(comparisonJson) },

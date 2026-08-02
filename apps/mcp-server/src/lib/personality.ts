@@ -45,8 +45,8 @@ export function buildResultsSummary({ mode, cards, locationLabel, assumptions }:
   const sentences = [`${opener} I found ${countPhrase(cards.length)} near ${locationLabel} worth a look.`];
 
   if (top) {
-    const topReasons = top.reasons.slice(0, 2).join(" and ");
-    sentences.push(topReasons ? `${top.name} is the strongest match - ${lowerFirst(topReasons)}.` : `${top.name} stood out most.`);
+    const topReasons = top.reasons.slice(0, 2).map(lowerFirst).join(" and ");
+    sentences.push(topReasons ? `${top.name} is the strongest match - ${topReasons}.` : `${top.name} stood out most.`);
   }
 
   if (assumptions.length > 0) {

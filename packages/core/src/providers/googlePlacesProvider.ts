@@ -232,9 +232,9 @@ export class GooglePlacesProvider implements RestaurantProvider {
       dietaryOptions: [],
       isIndependent: false,
       status: "active",
-      images: (place.photos ?? []).map(
-        (photo) => `${PLACES_PHOTO_MEDIA_URL}/${photo.name}/media?maxWidthPx=800&key=${this.apiKey}`,
-      ),
+      // Photo media requests require the server-side API key. Do not return
+      // key-bearing URLs to clients; expose them later through a backend proxy.
+      images: [],
       website: place.websiteUri,
       phone: place.internationalPhoneNumber,
       externalIds: { googlePlaceId: placeId },

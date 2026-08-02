@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bitejoy/core": ["../../packages/core/src/index.ts"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["src/**/__tests__/**"]
+}

@@ -15,7 +15,7 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run && npm run test -w @bitejoy/chatgpt-app",
     "test:watch": "vitest"
   },
   "devDependencies": {
@@ -24,6 +24,6 @@
     "eslint": "^9.15.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.16.0",
-    "vitest": "^2.1.6"
+    "vitest": "^4.1.10"
   }
 }
