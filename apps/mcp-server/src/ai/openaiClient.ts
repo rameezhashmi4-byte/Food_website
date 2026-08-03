@@ -55,8 +55,7 @@ const AI_EXTRACTABLE_FIELD_SCHEMAS = {
   wantsOffers: z.boolean(),
   prioritiseIndependent: z.boolean(),
 } as const;
-const AiExtractableFieldsSchema = z.object(AI_EXTRACTABLE_FIELD_SCHEMAS).partial();
-export type AiExtractableFields = z.infer<typeof AiExtractableFieldsSchema>;
+export type AiExtractableFields = Partial<z.infer<z.ZodObject<typeof AI_EXTRACTABLE_FIELD_SCHEMAS>>>;
 
 const EXTRACT_CRITERIA_SYSTEM_PROMPT = buildExtractCriteriaSystemPrompt({
   cuisines: CuisineSchema.options,

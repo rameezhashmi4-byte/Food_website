@@ -9,3 +9,8 @@ build/
 coverage/
 .DS_Store
 .claude/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+*.tsbuildinfo

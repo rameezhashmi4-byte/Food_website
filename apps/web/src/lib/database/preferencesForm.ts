@@ -1,5 +1,4 @@
 import { AtmosphereSchema, CuisineSchema, DietaryTagSchema, FacilitySchema, OccasionSchema } from "@bitejoy/core";
-import type { Atmosphere, Cuisine, DietaryTag, Facility, Occasion } from "@bitejoy/core";
 import type { PreferencesPatch, ProfilePatch, UserPreferences } from "./index";
 
 /** Option lists for the preferences form's checkbox/radio groups, straight from `@bitejoy/core`'s shared vocabulary. */

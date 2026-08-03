@@ -15,12 +15,19 @@ This repo is being built in stages (see "Build order" below).
   8 tools to ChatGPT, and an interactive restaurant-card widget
   (`apps/chatgpt-app`) - built on top of Stage 1's scoring engine without
   duplicating any of its logic. See [docs/chatgpt-app.md](docs/chatgpt-app.md)
-  for the full write-up, exact local testing steps, and honest limitations
-  (it has been tested thoroughly locally, but not against a live ChatGPT
-  connection or a live OpenAI/Google key).
+  for the full write-up, exact local testing steps, and honest limitations.
+- **Stage 3 (complete):** Supabase authentication (Google, Microsoft,
+  email magic-link), a shared `@bitejoy/database` package used identically
+  by the MCP server and the website, 5 new authenticated MCP tools, and a
+  minimal Next.js account website (`apps/web`). See
+  [docs/authentication.md](docs/authentication.md) (policy),
+  [docs/mcp-oauth.md](docs/mcp-oauth.md) (MCP-side mechanics), and
+  [docs/stage-3-verification.md](docs/stage-3-verification.md) (exactly
+  what was live-tested versus not - read this before trusting any Stage 3
+  claim).
 
-Stages 3-6 (auth, the supporting website, the embeddable widget, live data
-providers) come next.
+Stages 4-6 (the supporting website's deeper features, the embeddable
+widget, live data providers) come next.
 
 ## Why structured scoring comes before the AI model
 
@@ -40,18 +47,31 @@ packages/
                  recommendation scoring engine, replaceable provider adapters,
                  and fictional demo data. Framework-agnostic, imported by
                  every later stage (MCP server, website, widget).
+  database/      @bitejoy/database - the shared persistence contract
+                 (UserRepository: profile, preferences, saved restaurants,
+                 activity log) plus an InMemoryUserRepository (tests) and a
+                 SupabaseUserRepository (production) - used identically by
+                 apps/mcp-server and apps/web so there is exactly one
+                 implementation of "how BiteJoy reads/writes user data".
   db/            @bitejoy/db - Supabase SQL migrations (full data model,
                  including tables reserved for future community features)
                  and a seed script that loads the fictional dataset.
 apps/
-  mcp-server/    @bitejoy/mcp-server - the MCP server: 8 ChatGPT app tools,
-                 deterministic natural-language extraction, an optional
-                 OpenAI enhancement layer, and widget resource registration.
-                 Depends on @bitejoy/core for all filtering/ranking - no
-                 recommendation logic is duplicated here.
+  mcp-server/    @bitejoy/mcp-server - the MCP server: 8 public tools + 5
+                 Stage 3 authenticated tools, deterministic natural-language
+                 extraction, an optional OpenAI enhancement layer, and
+                 widget resource registration. Depends on @bitejoy/core for
+                 all filtering/ranking and @bitejoy/database for all
+                 persistence - no logic is duplicated here.
   chatgpt-app/   @bitejoy/chatgpt-app - the interactive widget UI (React,
                  built as dependency-free single-file HTML) that ChatGPT
-                 renders inline for search results and comparisons.
+                 renders inline for search results and comparisons, with
+                 auth-aware Save/Remove actions.
+  web/           @bitejoy/web - the BiteJoy account website (Next.js 16 App
+                 Router): sign in/up, profile, preferences, saved
+                 restaurants, connected apps, account deletion. Server-only
+                 Supabase access throughout; depends on @bitejoy/database
+                 for all persistence, same as the MCP server.
 ```
 
 ### `packages/core`
@@ -158,18 +178,39 @@ npm run build -w @bitejoy/chatgpt-app   # -> dist/results.html, dist/comparison.
 npm run dev -w @bitejoy/chatgpt-app     # preview against built-in demo data, no server needed
 ```
 
-Actions that aren't implemented yet (Save later, Book, Order - Stage 3+)
-are shown disabled rather than pretending to work; Directions is a genuine
-maps link; View details and Compare are fully functional.
+Save/Remove are real as of Stage 3 (optimistic UI, backed by the
+authenticated MCP tools - see [docs/mcp-oauth.md](docs/mcp-oauth.md));
+Book and Order stay shown disabled - no real booking/ordering integration
+exists yet. Directions is a genuine maps link; View details and Compare
+are fully functional.
+
+### `apps/web`
+
+The BiteJoy account website - Next.js 16 App Router, server-only Supabase
+access (`@supabase/ssr`), Tailwind design system shared visually with the
+ChatGPT widget's own color tokens.
+
+```bash
+npm run dev -w @bitejoy/web    # http://localhost:3000
+npm run build -w @bitejoy/web
+```
+
+Pages: `/`, `/login`, `/signup` (Google/Microsoft/email magic-link),
+`/account`, `/account/preferences`, `/account/saved`,
+`/account/connected-apps`, `/account/delete`, `/privacy`, plus a
+`/style-guide` component reference. See
+[docs/stage-3-verification.md](docs/stage-3-verification.md) for exactly
+what's been live-tested here.
 
 ## Getting started
 
 ```bash
 npm install
-npm run build       # builds @bitejoy/core, both widget bundles, and the MCP server
+npm run build       # builds every workspace (core, database, db, mcp-server, chatgpt-app, web)
 npm run typecheck   # typechecks every workspace
 npm run lint         # ESLint (flat config, typescript-eslint)
-npm run test          # vitest across every workspace (109 tests)
+npm run test          # vitest across every workspace (180+ tests)
+npm run test:e2e     # Playwright, against a real apps/web dev server
 ```
 
 The flagship example from the product spec - *"Find somewhere fun near
@@ -185,24 +226,35 @@ MCP protocol: `understand_food_request` → `search_restaurants`).
       recommendation scoring, provider adapters.
 - [x] **Stage 2** - MCP server (8 tools), interactive restaurant-card
       widget, comparison flow. See [docs/chatgpt-app.md](docs/chatgpt-app.md).
-- [ ] **Stage 3** - authentication, preferences, saved restaurants, shared
-      group shortlists and voting.
-- [ ] **Stage 4** - supporting Next.js website, restaurant pages, account
-      pages, admin dashboard.
+- [x] **Stage 3** - Supabase authentication, `@bitejoy/database`, 5
+      authenticated MCP tools, `apps/web` account website. See
+      [docs/stage-3-verification.md](docs/stage-3-verification.md) for what
+      was genuinely live-tested versus not.
+- [ ] **Stage 4** - restaurant pages, admin dashboard, shared group
+      shortlists and voting.
 - [ ] **Stage 5** - embeddable website chat widget (general / restaurant /
       hotel-venue modes) + installation docs.
 - [ ] **Stage 6** - permitted live data providers, offers/freshness
       checking, monitoring and deployment.
 
-## Known follow-ups going into Stage 3+
+## Known follow-ups going into Stage 4+
 
-- `GooglePlacesProvider` is untested against a live key; its field mapping
-  should be re-verified against current Google Places API (New) docs before
-  it handles real traffic.
-- The MCP server has not been connected to a live ChatGPT session, and the
-  optional OpenAI enhancement layer has not been exercised against a live
-  key - both are implemented and locally tested (protocol layer, deterministic
-  fallbacks), see "Current limitations" in
-  [docs/chatgpt-app.md](docs/chatgpt-app.md).
-- No auth yet, so `save_restaurant` / booking / ordering are Stage 3+; the
-  widget shows those actions disabled rather than pretending they work.
+- `GooglePlacesProvider` is live-tested (Stage 2.5) but should be
+  re-verified periodically against current Google Places API (New) docs.
+- The MCP server has not been connected to a live ChatGPT session end to
+  end (no Dynamic Client Registration on Supabase's OAuth AS - see
+  [docs/mcp-oauth.md](docs/mcp-oauth.md)); the optional OpenAI enhancement
+  layer has been live-tested (Stage 2.5).
+- Migrations `0008`-`0012` (Stage 3's profile/preferences/activity/saved-restaurant
+  schema) have not yet been applied to the live Supabase project - this
+  environment has no Postgres connection credentials, only REST/Auth API
+  keys. Apply via the Supabase SQL Editor - see
+  [docs/supabase-setup.md](docs/supabase-setup.md) - before RLS
+  cross-user isolation (already written as a live test, see
+  [docs/stage-3-verification.md](docs/stage-3-verification.md)) or seeding
+  (`npm run seed -w @bitejoy/db`) can actually run.
+- Live browser OAuth click-through (a real Google/Microsoft account
+  completing sign-in) and a real ChatGPT session calling the authenticated
+  MCP tools are both implemented and tested up to the edge of what this
+  environment can drive automatically - see
+  [docs/stage-3-verification.md](docs/stage-3-verification.md).

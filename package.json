@@ -15,11 +15,13 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
-    "test": "vitest run && npm run test -w @bitejoy/chatgpt-app",
-    "test:watch": "vitest"
+    "test": "vitest run && npm run test -w @bitejoy/chatgpt-app && npm run test -w @bitejoy/web",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.10.1",
     "eslint": "^9.15.0",
     "typescript": "^5.7.2",

@@ -88,6 +88,9 @@ body {
   padding: 32px 16px;
   text-align: center;
   color: var(--bj-text-muted);
+  border: 1px dashed var(--bj-border);
+  border-radius: var(--bj-radius);
+  background: var(--bj-surface);
 }
 
 .bj-grid {
@@ -253,12 +256,45 @@ body {
   font-size: 11.5px;
 }
 
+.bj-actions-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
 .bj-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: auto;
   padding-top: 10px;
+}
+
+.bj-connect-prompt {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bj-accent-soft);
+  color: var(--bj-accent-strong);
+  border-radius: var(--bj-radius-sm);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.bj-link-btn {
+  font: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  color: var(--bj-accent-strong);
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.bj-link-btn:hover {
+  color: var(--bj-accent);
 }
 
 .bj-btn {
@@ -359,6 +395,15 @@ body {
 }
 
 .bj-tradeoff {
+  display: inline-block;
   color: var(--bj-danger);
-  font-size: 12px;
+  background: var(--bj-danger-soft);
+  border-radius: var(--bj-radius-sm);
+  padding: 3px 8px;
+  font-size: 11.5px;
+  margin-bottom: 4px;
+}
+
+.bj-tradeoff:last-child {
+  margin-bottom: 0;
 }

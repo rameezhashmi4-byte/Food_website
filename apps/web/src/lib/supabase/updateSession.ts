@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -44,6 +45,7 @@ export async function updateSession(request: NextRequest): Promise<{ response: N
         }
       },
     },
+    global: { fetch: fetchWithTimeout },
   });
 
   const { data, error } = await supabase.auth.getClaims();

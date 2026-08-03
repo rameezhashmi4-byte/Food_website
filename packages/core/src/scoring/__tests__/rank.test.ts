@@ -50,8 +50,7 @@ describe("rankRestaurants", () => {
 
   it("offers_near_me only returns restaurants with a currently active offer", () => {
     const criteria = completeSearchCriteria({ location: CROYDON, radiusKm: 20, wantsOffers: true });
-    const now = new Date();
-    const recommendations = rankRestaurants(FICTIONAL_RESTAURANTS, criteria, { mode: "offers_near_me", at: now });
+    const recommendations = rankRestaurants(FICTIONAL_RESTAURANTS, criteria, { mode: "offers_near_me", at: FRIDAY_EVENING });
 
     expect(recommendations.length).toBeGreaterThan(0);
     for (const rec of recommendations) {

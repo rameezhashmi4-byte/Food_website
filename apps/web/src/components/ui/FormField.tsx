@@ -25,7 +25,7 @@ export interface FormFieldProps {
 export function FormField({ id, label, helperText, errorText, required, className, children }: FormFieldProps) {
   const describedBy = errorText ? `${id}-error` : helperText ? `${id}-helper` : undefined;
 
-  const control = React.cloneElement(children as React.ReactElement<any>, {
+  const control = React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
     id,
     "aria-invalid": errorText ? true : undefined,
     "aria-describedby": describedBy,

@@ -49,7 +49,6 @@ async function isSchemaMigrated(): Promise<boolean> {
 const schemaReady = await isSchemaMigrated();
 
 if (hasLiveEnv && !schemaReady) {
-  // eslint-disable-next-line no-console
   console.warn(
     "[supabaseRepository.live.test] SUPABASE_* env vars are present but migrations 0008-0010 " +
       "don't look applied yet (user_preferences.search_radius_km or user_activity is missing) - " +
@@ -58,7 +57,6 @@ if (hasLiveEnv && !schemaReady) {
   );
 }
 if (!hasLiveEnv) {
-  // eslint-disable-next-line no-console
   console.warn(
     "[supabaseRepository.live.test] SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY/SUPABASE_ANON_KEY not set - skipping the live suite.",
   );

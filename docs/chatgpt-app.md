@@ -310,9 +310,19 @@ source) since both return the same `Restaurant[]` shape.
 - **Not tested against a live OpenAI key.** The optional AI layer is
   implemented and unit-testable in its fallback path, but the actual model
   call has not been exercised end to end.
-- **No authentication yet.** Save later / Book / Order are shown disabled
-  in the widget - Stage 3 adds accounts, saved restaurants and real
-  persistence.
+- **Save is real, but optimistic-and-unverified up front.** Stage 3 adds
+  accounts and saved restaurants via `save_restaurant` /
+  `remove_saved_restaurant` / `list_saved_restaurants` /
+  `get_user_preferences` / `update_user_preferences` on the MCP server, and
+  the widget calls these for real (see `ActionButtons.tsx`). There is still
+  no documented, verified way for the widget to ask "is this ChatGPT user
+  authenticated with BiteJoy?" up front, so it optimistically flips Save to
+  "Saved ✓" on click and rolls back to a "connect your account" prompt if
+  the tool call reports `isError: true`. Connecting an account itself is a
+  handoff to the host conversation (`sendFollowUpMessage`), not a real
+  in-widget OAuth flow - the sandboxed widget iframe has no documented way
+  to drive that itself. Book / Order remain disabled - no real
+  booking/ordering integration exists yet.
 - **Stateless HTTP transport.** `http.ts` creates a fresh server + transport
   per request (no server-side session or widget state persistence across
   turns beyond what the client itself keeps).

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -43,5 +44,6 @@ export async function createSupabaseServerClient(): Promise<SupabaseClient> {
         }
       },
     },
+    global: { fetch: fetchWithTimeout },
   });
 }

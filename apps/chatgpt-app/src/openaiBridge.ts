@@ -47,6 +47,43 @@ export async function callHostTool(name: string, args: Record<string, unknown>):
   return true;
 }
 
+export interface HostToolCallResult {
+  /** Whether the host actually exposed `callTool` and we invoked it at all. */
+  called: boolean;
+  /** True only if the host was called AND the result wasn't `isError: true`. */
+  ok: boolean;
+  result?: unknown;
+}
+
+/**
+ * Like `callHostTool`, but also surfaces whether the call actually
+ * succeeded - needed for flows (like Save) that must roll back optimistic
+ * UI on failure rather than just reporting "did we manage to invoke the
+ * host at all".
+ *
+ * The Apps SDK doesn't document a way for a widget to check "is this
+ * ChatGPT user authenticated with BiteJoy" up front (see docs/chatgpt-app.md
+ * and this file's header comment - this whole area is new/unverified). The
+ * convention the Stage 3 MCP tool contract uses instead: an
+ * authenticated-only tool call (save/remove/list saved restaurants) fails
+ * for an unauthenticated caller with a clean `isError: true` result rather
+ * than throwing. So any `isError: true` result - or an outright host
+ * error, or no host/`callTool` being available at all - is treated the
+ * same way here: "couldn't complete this," letting the caller roll back
+ * and show a connect-account prompt instead of a false "success".
+ */
+export async function callHostToolDetailed(name: string, args: Record<string, unknown>): Promise<HostToolCallResult> {
+  const host = getHost();
+  if (!host?.callTool) return { called: false, ok: false };
+  try {
+    const result = await host.callTool(name, args);
+    const isError = Boolean((result as { isError?: boolean } | null | undefined)?.isError);
+    return { called: true, ok: !isError, result };
+  } catch {
+    return { called: true, ok: false };
+  }
+}
+
 export function sendFollowUpMessage(prompt: string): boolean {
   const host = getHost();
   if (!host?.sendFollowUpMessage) return false;
