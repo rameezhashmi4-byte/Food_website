@@ -4,16 +4,18 @@ export const metadata: Metadata = { title: "Privacy" };
 
 export default function PrivacyPage() {
   return (
-    <div className="stack">
-      <h1>Privacy</h1>
-      <p className="lede">
-        BiteJoy is built to hold as little about you as it needs to be useful. This page is a plain-language,
-        honest account of what that means in practice.
-      </p>
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-16 sm:px-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-text">Privacy</h1>
+        <p className="mt-2 max-w-xl text-lg text-muted">
+          BiteJoy is built to hold as little about you as it needs to be useful. This page is a plain-language,
+          honest account of what that means in practice.
+        </p>
+      </div>
 
       <section>
-        <h2>What BiteJoy stores</h2>
-        <ul>
+        <h2 className="text-xl font-bold tracking-tight text-text">What BiteJoy stores</h2>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-text">
           <li>
             <strong>Your profile</strong> - display name, email, avatar (if your sign-in provider gives us one),
             and which provider you signed in with.
@@ -36,8 +38,8 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>What BiteJoy does not store</h2>
-        <ul>
+        <h2 className="text-xl font-bold tracking-tight text-text">What BiteJoy does not store</h2>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-text">
           <li>Raw ChatGPT conversations - BiteJoy in ChatGPT only ever sends structured search criteria, never a transcript.</li>
           <li>Access or refresh tokens in application logs - session tokens live only in your browser&rsquo;s cookies, never printed to logs.</li>
           <li>Payment details - BiteJoy doesn&rsquo;t take payments or bookings.</li>
@@ -46,21 +48,23 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>Who can see it</h2>
-        <p>
+        <h2 className="text-xl font-bold tracking-tight text-text">Who can see it</h2>
+        <p className="mt-3 text-text">
           Your profile, preferences, saved restaurants and activity are only ever readable by you - enforced at the
           database level (Postgres row-level security), not just in this app&rsquo;s code.
         </p>
       </section>
 
       <section>
-        <h2>Requesting deletion</h2>
-        <p>
+        <h2 className="text-xl font-bold tracking-tight text-text">Requesting deletion</h2>
+        <p className="mt-3 text-text">
           You can permanently delete your account and everything above at any time from{" "}
-          <a href="/account/delete">Account → Delete account</a>. It removes your profile, preferences, saved
-          restaurants and activity log immediately, and then removes your sign-in identity itself - nothing is kept
-          in a &ldquo;soft-deleted&rdquo; state waiting to be purged later. Given how little BiteJoy stores in the first
-          place, there is nothing left behind afterwards.
+          <a className="text-accent hover:underline" href="/account/delete">
+            Account → Delete account
+          </a>
+          . It removes your profile, preferences, saved restaurants and activity log immediately, and then removes
+          your sign-in identity itself - nothing is kept in a &ldquo;soft-deleted&rdquo; state waiting to be purged
+          later. Given how little BiteJoy stores in the first place, there is nothing left behind afterwards.
         </p>
       </section>
     </div>
