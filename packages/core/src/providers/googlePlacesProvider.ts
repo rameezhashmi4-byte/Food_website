@@ -5,10 +5,17 @@ import type { ProviderSearchParams, RestaurantProvider } from "./types.js";
 /**
  * Adapter for the Google Places API (New), intended to run only in a
  * secure backend context - the API key must never reach a browser or the
- * ChatGPT client. This is a Stage 1 skeleton: it is structurally complete
- * and type-safe, but has not been exercised against a live key in this
- * environment, and Google's response shape should be re-verified against
- * current docs before it is switched on for real traffic (Stage 6).
+ * ChatGPT client.
+ *
+ * Verified against a live key on 2026-08-03 (Stage 2.5): `searchNearby`
+ * with `includedTypes: ["restaurant"]` genuinely returns real, correctly
+ * located restaurants near a given point - but Google's "restaurant" type
+ * is looser than expected and also surfaces hotels, food courts and even a
+ * grocery store (each carries "restaurant" as one of several secondary
+ * types). `EXCLUDED_PRIMARY_TYPES` filters those out using `primaryType`,
+ * which is a much more reliable signal than membership in `types`. Full
+ * production hardening (pagination, richer category coverage, caching) is
+ * still Stage 6 scope.
  *
  * Google Places has no concept of menus, prices-per-person, offers or
  * independent-vs-chain status, so those fields are either estimated from
@@ -30,6 +37,7 @@ const FIELD_MASK = [
   "places.userRatingCount",
   "places.regularOpeningHours",
   "places.types",
+  "places.primaryType",
   "places.photos",
   "places.websiteUri",
   "places.internationalPhoneNumber",
@@ -37,6 +45,22 @@ const FIELD_MASK = [
   "places.parkingOptions",
   "places.accessibilityOptions",
 ].join(",");
+
+/** Venues that legitimately carry "restaurant" as a secondary type but aren't what BiteJoy means by one - confirmed via a live nearby-search sample. */
+const EXCLUDED_PRIMARY_TYPES = new Set([
+  "hotel",
+  "lodging",
+  "inn",
+  "bed_and_breakfast",
+  "resort_hotel",
+  "store",
+  "grocery_store",
+  "convenience_store",
+  "asian_grocery_store",
+  "food_store",
+  "supermarket",
+  "gas_station",
+]);
 
 const GOOGLE_PRICE_LEVEL_MAP: Record<string, PriceLevel> = {
   PRICE_LEVEL_FREE: "budget",
@@ -86,6 +110,10 @@ const CUISINE_TYPE_MAP: Record<string, Cuisine> = {
   ethiopian_restaurant: "ethiopian",
   fusion_restaurant: "fusion",
   tapas_restaurant: "tapas_small_plates",
+  // Observed on a live sample but not in Stage 1's original map - generic
+  // categories, so the mapping is a best-effort convention, not a fact.
+  fast_food_restaurant: "american",
+  buffet_restaurant: "fusion",
 };
 
 const GOOGLE_DAY_TO_WEEKDAY: Weekday[] = [
@@ -114,6 +142,7 @@ interface GooglePlace {
   userRatingCount?: number;
   regularOpeningHours?: { periods?: Array<{ open: GooglePlaceTime; close?: GooglePlaceTime }> };
   types?: string[];
+  primaryType?: string;
   photos?: Array<{ name: string }>;
   websiteUri?: string;
   internationalPhoneNumber?: string;
@@ -171,7 +200,9 @@ export class GooglePlacesProvider implements RestaurantProvider {
     }
 
     const data = (await response.json()) as GoogleSearchNearbyResponse;
-    return (data.places ?? []).map((place) => this.toRestaurant(place));
+    return (data.places ?? [])
+      .filter((place) => !place.primaryType || !EXCLUDED_PRIMARY_TYPES.has(place.primaryType))
+      .map((place) => this.toRestaurant(place));
   }
 
   async getRestaurantById(id: string): Promise<Restaurant | undefined> {

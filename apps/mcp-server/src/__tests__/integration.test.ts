@@ -59,9 +59,10 @@ describe("integration: natural language request -> structured search -> ranked r
   it("chains search_restaurants into compare_restaurants using the top two results", async () => {
     harness = await createConnectedTestClient();
 
+    // Pinned to 7pm so this doesn't depend on which fixtures happen to be open right now.
     const searched = await harness.client.callTool({
       name: "search_restaurants",
-      arguments: { location: "Croydon", radiusKm: 20, cuisines: ["burgers"] },
+      arguments: { location: "Croydon", radiusKm: 20, cuisines: ["burgers"], dateTime: "7pm" },
     });
     const structured = searched.structuredContent as { recommendations: RestaurantCardView[] };
     const [first, second] = structured.recommendations;
@@ -69,7 +70,7 @@ describe("integration: natural language request -> structured search -> ranked r
 
     const compared = await harness.client.callTool({
       name: "compare_restaurants",
-      arguments: { restaurantIds: [first!.id, second!.id], location: "Croydon", radiusKm: 20, cuisines: ["burgers"] },
+      arguments: { restaurantIds: [first!.id, second!.id], location: "Croydon", radiusKm: 20, cuisines: ["burgers"], dateTime: "7pm" },
     });
 
     expect(compared.isError).toBeFalsy();

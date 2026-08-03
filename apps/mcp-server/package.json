@@ -13,8 +13,11 @@
   },
   "dependencies": {
     "@bitejoy/core": "*",
+    "@bitejoy/database": "*",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@supabase/supabase-js": "^2.45.4",
     "express": "^5.2.1",
+    "jose": "^6.2.7",
     "openai": "^7.3.0",
     "zod": "^3.25.76"
   },

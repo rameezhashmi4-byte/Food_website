@@ -1,0 +1,17 @@
+export {
+  UserProfileSchema,
+  UserPreferencesSchema,
+  ProfilePatchSchema,
+  PreferencesPatchSchema,
+  SavedRestaurantSchema,
+  ActivityTypeSchema,
+  type UserProfile,
+  type UserPreferences,
+  type ProfilePatch,
+  type PreferencesPatch,
+  type SavedRestaurant,
+  type ActivityType,
+  type ListSavedRestaurantsOptions,
+  type SavedRestaurantPage,
+  type UserRepository,
+} from "@bitejoy/database";

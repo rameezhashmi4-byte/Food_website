@@ -121,25 +121,105 @@ in a real browser without a running server or ChatGPT host.
 
 ## Connecting in ChatGPT developer mode
 
-This is the documented flow per OpenAI's Apps SDK docs, **not yet exercised
-against a live ChatGPT connection**:
+**This exact checklist has not been run against a live ChatGPT session from
+this development environment** - there's no browser or ChatGPT access here,
+and no tunneling tool (`ngrok`, `localtunnel`, ...) is installed in this
+sandbox. Everything below is the precise, real sequence to run manually;
+nothing in it is simulated or assumed to have passed.
 
-1. Run the HTTP server somewhere ChatGPT can reach it (`npm run start:http`
-   locally + a tunnel such as `ngrok http 3333` for a quick test, or deploy
-   it).
-2. In ChatGPT, enable developer mode and add a new connector pointing at
-   `https://<your-host>/mcp`.
-3. ChatGPT calls `tools/list`, discovers the 8 tools below, and calls
-   `resources/read` for each tool's `ui://` resource the first time it
-   renders a widget.
-4. Try the flagship prompt: *"Find somewhere fun near Croydon for four
-   people tonight. Around £30 each, good burgers, drinks and somewhere with
-   parking."*
+### 1. Start the MCP server
 
-If the widget doesn't render inside ChatGPT, the most likely cause is the
-resource MIME type / `_meta` convention drift mentioned below - re-check
-against [developers.openai.com/apps-sdk](https://developers.openai.com/apps-sdk)
-before debugging further.
+```bash
+npm run build
+npm run start:http -w @bitejoy/mcp-server   # http://localhost:3333/mcp
+```
+
+Confirm it's actually up: `curl http://localhost:3333/healthz` should return
+`{"ok":true,"server":"bitejoy"}`.
+
+### 2. Expose it over HTTPS
+
+ChatGPT developer mode requires an HTTPS endpoint - `localhost` alone isn't
+reachable from ChatGPT's servers. For local development, a tunnel is the
+quickest way to get one; **the tunnel itself is a dev convenience, never
+part of the production architecture** - a real deployment should terminate
+TLS on a proper host instead (see `MCP_PUBLIC_URL` in `.env.example`, which
+should be set to whichever of the two you're using).
+
+```bash
+# any of these work - pick whichever you have installed
+ngrok http 3333
+# or
+npx localtunnel --port 3333
+```
+
+Note the resulting `https://…` URL. Set `MCP_PUBLIC_URL` in `.env` to
+`https://<tunnel-host>/mcp` and restart the server so its OAuth Protected
+Resource Metadata (see [docs/mcp-oauth.md](mcp-oauth.md)) advertises the
+right public URL.
+
+### 3. The exact MCP endpoint URL format
+
+```
+https://<tunnel-or-production-host>/mcp
+```
+
+That's the single URL ChatGPT needs - the same streamable-HTTP path used
+for local `curl` testing above, just reached over the tunnel instead of
+`localhost`.
+
+### 4. Enable ChatGPT developer mode and connect
+
+1. In ChatGPT, open Settings → Apps & Connectors (or the current equivalent
+   - this menu has moved before and may again; search ChatGPT's own help
+   center for "developer mode" if it's not where expected).
+2. Enable developer mode.
+3. Add a new connector / custom connector, pointing at the URL from step 3.
+4. If the server requires authentication for a tool (see
+   [docs/mcp-oauth.md](mcp-oauth.md) - public restaurant-discovery tools
+   never require it, only the account-linked ones like `save_restaurant`
+   do), ChatGPT should prompt for sign-in the first time an authenticated
+   tool is invoked, redirecting through Supabase's real OAuth screen.
+5. ChatGPT calls `tools/list` and should discover all registered tools, and
+   calls `resources/read` for a tool's `ui://` resource the first time it
+   renders that tool's widget.
+
+### 5. Prompts to test
+
+- *"Find somewhere fun near Croydon for four people tonight. Around £30
+  each, good burgers, drinks and somewhere with parking."* (public, no
+  auth - should return Flame & Fork on top with an interactive card grid)
+- *"What hidden gems are there near Croydon?"* (public)
+- *"Compare Flame & Fork and Wok This Way for a group of 4."* (public)
+- *"Save Flame & Fork for later"* (requires the account-linking flow -
+  expect a sign-in prompt the first time)
+- *"What are my saved restaurants?"* (requires auth)
+
+### 6. Inspecting failures
+
+- **Tool not discovered at all**: check the server logs for startup errors,
+  and confirm `tools/list` returns it via `curl` or the MCP Inspector
+  (below) before suspecting the ChatGPT side.
+- **Tool call fails immediately**: every tool returns `isError: true` with a
+  human-readable message rather than a raw exception (see
+  `apps/mcp-server/src/lib/errors.ts`) - that message is exactly what
+  ChatGPT will show; there's no hidden detail being swallowed.
+- **Widget doesn't render**: most likely cause is drift in the resource MIME
+  type / `_meta` convention (`openai/outputTemplate`, `text/html+skybridge`)
+  - re-check against
+  [developers.openai.com/apps-sdk](https://developers.openai.com/apps-sdk),
+  since this surface has been evolving. Confirm the resource itself is
+  correct first: `curl`-fetch it via the MCP Inspector's resource viewer.
+- **Auth prompt never appears / fails**: check the server's
+  `/.well-known/oauth-protected-resource` response is reachable over the
+  tunnel URL, and see the troubleshooting section in
+  [docs/mcp-oauth.md](mcp-oauth.md).
+
+If ChatGPT access genuinely isn't available in a given environment (as
+here), everything up through "the tunnel URL responds correctly to a raw
+MCP `tools/call` over HTTPS" can still be verified without it - do that,
+document exactly which parts you verified, and leave the ChatGPT-side steps
+as an explicit manual checklist rather than claiming they were run.
 
 ## Tools
 

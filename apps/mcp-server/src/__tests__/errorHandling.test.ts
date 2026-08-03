@@ -42,12 +42,13 @@ describe("MCP-level error handling", () => {
     expect(message).not.toMatch(/node_modules|\.ts:\d+|\.js:\d+|at Object\.|at async/i);
   });
 
-  it("lists all 8 registered tools", async () => {
+  it("lists all 8 public tools plus the 5 Stage 3 authenticated tools", async () => {
     harness = await createConnectedTestClient();
     const { tools } = await harness.client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
+        // Stage 2 public tools - unchanged, must keep working with zero auth.
         "compare_restaurants",
         "find_current_offers",
         "find_hidden_gems",
@@ -56,6 +57,12 @@ describe("MCP-level error handling", () => {
         "search_restaurants",
         "surprise_me",
         "understand_food_request",
+        // Stage 3 authenticated tools.
+        "get_user_preferences",
+        "update_user_preferences",
+        "save_restaurant",
+        "remove_saved_restaurant",
+        "list_saved_restaurants",
       ].sort(),
     );
   });

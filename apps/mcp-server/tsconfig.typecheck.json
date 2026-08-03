@@ -4,7 +4,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@bitejoy/core": ["../../packages/core/src/index.ts"]
+      "@bitejoy/core": ["../../packages/core/src/index.ts"],
+      "@bitejoy/database": ["../../packages/database/src/index.ts"]
     }
   },
   "include": ["src"],

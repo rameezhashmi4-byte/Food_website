@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { AtmosphereSchema, CuisineSchema, DietaryTagSchema, FacilitySchema, OccasionSchema } from "@bitejoy/core";
-import { EXTRACT_CRITERIA_SYSTEM_PROMPT, buildExtractCriteriaUserPrompt } from "./prompts/extractCriteria.js";
+import { buildExtractCriteriaSystemPrompt, buildExtractCriteriaUserPrompt } from "./prompts/extractCriteria.js";
 import { EXPLAIN_RECOMMENDATIONS_SYSTEM_PROMPT, buildExplainRecommendationsUserPrompt } from "./prompts/explainRecommendations.js";
 import { COMPARE_RESTAURANTS_SYSTEM_PROMPT, buildCompareRestaurantsUserPrompt } from "./prompts/compareRestaurants.js";
 
@@ -41,23 +41,50 @@ function getClient(): OpenAI | undefined {
 }
 
 /** Judgment-call fields only - deliberately excludes location/coordinates, which stay purely deterministic (gazetteer). */
-const AiExtractableFieldsSchema = z
-  .object({
-    partySize: z.number().int().positive().max(50),
-    budgetPerPersonGbp: z.number().positive(),
-    radiusKm: z.number().positive().max(50),
-    cuisines: z.array(CuisineSchema),
-    foodPreferences: z.array(z.string()),
-    drinkPreferences: z.array(z.string()),
-    dietaryNeeds: z.array(DietaryTagSchema),
-    occasion: OccasionSchema,
-    atmosphere: z.array(AtmosphereSchema),
-    requiredFacilities: z.array(FacilitySchema),
-    wantsOffers: z.boolean(),
-    prioritiseIndependent: z.boolean(),
-  })
-  .partial();
+const AI_EXTRACTABLE_FIELD_SCHEMAS = {
+  partySize: z.number().int().positive().max(50),
+  budgetPerPersonGbp: z.number().positive(),
+  radiusKm: z.number().positive().max(50),
+  cuisines: z.array(CuisineSchema),
+  foodPreferences: z.array(z.string()),
+  drinkPreferences: z.array(z.string()),
+  dietaryNeeds: z.array(DietaryTagSchema),
+  occasion: OccasionSchema,
+  atmosphere: z.array(AtmosphereSchema),
+  requiredFacilities: z.array(FacilitySchema),
+  wantsOffers: z.boolean(),
+  prioritiseIndependent: z.boolean(),
+} as const;
+const AiExtractableFieldsSchema = z.object(AI_EXTRACTABLE_FIELD_SCHEMAS).partial();
 export type AiExtractableFields = z.infer<typeof AiExtractableFieldsSchema>;
+
+const EXTRACT_CRITERIA_SYSTEM_PROMPT = buildExtractCriteriaSystemPrompt({
+  cuisines: CuisineSchema.options,
+  dietaryNeeds: DietaryTagSchema.options,
+  occasions: OccasionSchema.options,
+  atmosphere: AtmosphereSchema.options,
+  facilities: FacilitySchema.options,
+});
+
+/**
+ * Validates each field independently instead of the whole object at once -
+ * a live test showed a model can get one enum field wrong (e.g. "date"
+ * instead of "first_date") while getting everything else right; failing
+ * the whole response over one bad field would throw away four genuinely
+ * correct ones. Unknown keys and per-field failures are silently dropped,
+ * never surfaced as invented data.
+ */
+function pickValidFields(raw: unknown): AiExtractableFields {
+  if (typeof raw !== "object" || raw === null) return {};
+  const result: Record<string, unknown> = {};
+  for (const [key, fieldSchema] of Object.entries(AI_EXTRACTABLE_FIELD_SCHEMAS)) {
+    if (!(key in raw)) continue;
+    const value = (raw as Record<string, unknown>)[key];
+    const parsed = fieldSchema.safeParse(value);
+    if (parsed.success) result[key] = parsed.data;
+  }
+  return result as AiExtractableFields;
+}
 
 export async function refineCriteriaWithAI(message: string): Promise<AiExtractableFields | undefined> {
   const openai = getClient();
@@ -77,8 +104,8 @@ export async function refineCriteriaWithAI(message: string): Promise<AiExtractab
     const raw = response.choices[0]?.message?.content;
     if (!raw) return undefined;
 
-    const parsed = AiExtractableFieldsSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : undefined;
+    const fields = pickValidFields(JSON.parse(raw));
+    return Object.keys(fields).length > 0 ? fields : undefined;
   } catch {
     return undefined;
   }
