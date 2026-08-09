@@ -28,6 +28,16 @@ begin;
 -- UserProfile / UserPreferences contract (packages/database)
 -- ============================================================
 
+-- Matches @bitejoy/core's OccasionSchema (packages/core/src/types/common.ts) exactly.
+-- (Fixed after a live run confirmed this type was never actually created by
+-- 0001_extensions_and_enums.sql, despite this script's original comment
+-- claiming otherwise - it only ever existed as a Zod enum in @bitejoy/core.)
+create type occasion as enum (
+  'relaxed_evening', 'first_date', 'birthday', 'family_meal',
+  'catch_up_with_friends', 'quick_lunch', 'celebration',
+  'late_night_food', 'business_meal', 'solo_treat'
+);
+
 alter table profiles
   add column home_area text,
   add column work_area text;
@@ -56,7 +66,24 @@ alter table user_preferences rename column favorite_drinks to drink_preferences;
 alter table user_preferences drop column home_lat;
 alter table user_preferences drop column home_lng;
 
-alter table user_preferences drop constraint user_preferences_budget_per_person_gbp_check;
+-- Dropped by definition-content lookup, not by a guessed/assumed name - a
+-- live run showed the name Postgres actually assigned this constraint back
+-- in 0003 doesn't match the `<table>_<column>_check` convention this
+-- migration originally (wrongly) assumed.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'user_preferences'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%budget_per_person_gbp%'
+  loop
+    execute format('alter table user_preferences drop constraint %I', c.conname);
+  end loop;
+end $$;
+
 alter table user_preferences
   add constraint user_preferences_budget_per_person_gbp_check
     check (budget_per_person_gbp is null or (budget_per_person_gbp > 0 and budget_per_person_gbp <= 1000)),
@@ -125,7 +152,23 @@ grant execute on function public.delete_own_account() to authenticated;
 -- provider-defined string instead of a hard FK to restaurants(id)
 -- ============================================================
 
-alter table saved_restaurants drop constraint saved_restaurants_restaurant_id_fkey;
+-- Dropped by definition-content lookup, not the assumed default-naming
+-- convention - the near-identical assumption above for a check constraint
+-- turned out wrong on a live run, so this one isn't trusted either.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'saved_restaurants'::regclass
+      and contype = 'f'
+      and pg_get_constraintdef(oid) ilike '%restaurant_id%'
+  loop
+    execute format('alter table saved_restaurants drop constraint %I', c.conname);
+  end loop;
+end $$;
+
 alter table saved_restaurants alter column restaurant_id type text;
 
 commit;

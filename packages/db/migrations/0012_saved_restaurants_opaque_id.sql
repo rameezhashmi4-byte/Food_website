@@ -16,5 +16,21 @@
 -- calling provider's job (see apps/mcp-server's savedRestaurantView.ts /
 -- apps/web's restaurants/lookup.ts), not the database's.
 
-alter table saved_restaurants drop constraint saved_restaurants_restaurant_id_fkey;
+-- Dropped by definition-content lookup, not the assumed default-naming
+-- convention - 0008's near-identical assumption for a check constraint
+-- turned out wrong on a live run, so this one isn't trusted either.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'saved_restaurants'::regclass
+      and contype = 'f'
+      and pg_get_constraintdef(oid) ilike '%restaurant_id%'
+  loop
+    execute format('alter table saved_restaurants drop constraint %I', c.conname);
+  end loop;
+end $$;
+
 alter table saved_restaurants alter column restaurant_id type text;

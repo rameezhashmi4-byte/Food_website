@@ -22,10 +22,12 @@
 --   * `user_preferences` gains every field `UserPreferences` has that
 --     Stage 1 didn't: search radius, max travel time, disliked cuisines,
 --     food preferences, favourite occasions, parking importance,
---     accessibility needs and default party size. These reuse the
---     `cuisine`, `atmosphere`, `occasion` and `facility` enum types
---     already defined in 0001_extensions_and_enums.sql rather than
---     redefining them.
+--     accessibility needs and default party size. `cuisine`, `atmosphere`
+--     and `facility` reuse the enum types already defined in
+--     0001_extensions_and_enums.sql; `occasion` does NOT - despite the
+--     original version of this comment claiming otherwise, 0001 only ever
+--     defined it as a TypeScript/Zod enum in @bitejoy/core, never as a
+--     Postgres type, so it's created below instead of being reused.
 --
 --   * `user_preferences.favorite_drinks` (text[]) is renamed to
 --     `drink_preferences` to match `UserPreferences.drinkPreferences` -
@@ -38,6 +40,13 @@
 --     scoring is untouched, on `restaurants`). The project has no
 --     production users yet, so dropping now is safe; carrying the dead
 --     columns forward would just be confusing.
+
+-- Matches @bitejoy/core's OccasionSchema (packages/core/src/types/common.ts) exactly.
+create type occasion as enum (
+  'relaxed_evening', 'first_date', 'birthday', 'family_meal',
+  'catch_up_with_friends', 'quick_lunch', 'celebration',
+  'late_night_food', 'business_meal', 'solo_treat'
+);
 
 alter table profiles
   add column home_area text,
@@ -73,7 +82,24 @@ alter table user_preferences drop column home_lng;
 -- Re-bound the existing budget check (was "> 0" with no ceiling) to match
 -- `UserPreferencesSchema.budgetPerPersonGbp`'s `.max(1000)`, and add
 -- matching checks for the new bounded fields.
-alter table user_preferences drop constraint user_preferences_budget_per_person_gbp_check;
+-- Dropped by definition-content lookup, not by a guessed/assumed name - a
+-- live run showed the name Postgres actually assigned this constraint back
+-- in 0003 doesn't match the `<table>_<column>_check` convention this
+-- migration originally (wrongly) assumed.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'user_preferences'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%budget_per_person_gbp%'
+  loop
+    execute format('alter table user_preferences drop constraint %I', c.conname);
+  end loop;
+end $$;
+
 alter table user_preferences
   add constraint user_preferences_budget_per_person_gbp_check
     check (budget_per_person_gbp is null or (budget_per_person_gbp > 0 and budget_per_person_gbp <= 1000)),
