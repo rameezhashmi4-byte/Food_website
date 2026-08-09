@@ -16,7 +16,7 @@ All run from the repo root against the final integrated tree:
 |---|---|
 | `npm run typecheck` (6 workspaces: core, database, db, chatgpt-app, mcp-server, web) | Clean, 0 errors |
 | `npm run lint` (ESLint, flat config) | Clean, 0 errors, 0 warnings |
-| `npm run test` (vitest: core+database+mcp-server, then chatgpt-app, then web) | **187 passed, 1 skipped**, 0 failed |
+| `npm run test` (vitest: core+database+mcp-server, then chatgpt-app, then web) | **190 passed, 1 skipped**, 0 failed |
 | `npm run build` (all 6 workspaces) | Clean - `tsc` builds, both widget bundles, `next build` |
 | `npm audit` (repo root) | 3 high-severity advisories, all transitive inside `next`'s own bundled `postgres`/`sharp` (image optimization) - see "Known gaps" below |
 
@@ -110,6 +110,18 @@ suite genuinely ran and passed with those env vars present.
   (save → list → remove) run against the real Supabase project using a
   real disposable test user created via the Admin API and deleted
   immediately after - not mocked.
+- **A real GPT Builder attempt surfaced a genuine platform constraint no
+  amount of local testing would have caught**: the GPT Builder rejects an
+  Action whose OAuth Authorization URL/Token URL don't share a root domain
+  with the API's own hostname, which Supabase's OAuth server
+  (`*.supabase.co`) structurally never will. Fixed with a thin reverse
+  proxy (`apps/mcp-server/src/rest/oauthProxy.ts`) so ChatGPT talks to
+  this server's own domain for both OAuth endpoints, which forwards to
+  the real Supabase endpoints behind the scenes - verified live: the
+  authorize redirect lands on the real Supabase authorize URL with the
+  query string intact, and a token-exchange POST reaches Supabase for
+  real (confirmed by Supabase's own "invalid client_id format" response
+  to a deliberately fake client id, not a local error).
 
 ## What was NOT live-tested
 

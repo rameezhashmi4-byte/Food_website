@@ -268,22 +268,38 @@ instead of silently doing nothing.
    - Import from URL: `<your-server-url>/openapi.json`
    - Authentication: OAuth
      - Client ID / Client Secret: from step 2
-     - Authorization URL: `<SUPABASE_URL>/auth/v1/oauth/authorize`
-     - Token URL: `<SUPABASE_URL>/auth/v1/oauth/token`
+     - Authorization URL: `<your-server-url>/oauth/authorize`
+     - Token URL: `<your-server-url>/oauth/token`
      - Scope: whatever the dashboard's client-creation screen in step 2
        actually calls it (`email` is `rest/openapiSchema.ts`'s best-guess
        default, not empirically confirmed against this specific Supabase
        feature - worth checking against the real screen)
+
+     **Important - use your own server's URL here, NOT Supabase's
+     directly.** The GPT Builder enforces (confirmed live, a real error
+     from the actual UI): *"Authorization URL, Token URL, and API
+     hostname must share a root domain"* - and Supabase's OAuth server
+     (`*.supabase.co`) will never share a domain with wherever this API
+     is hosted. `rest/oauthProxy.ts` is a thin reverse proxy that makes
+     `<your-server-url>/oauth/authorize` and `/oauth/token` forward to
+     the real Supabase endpoints behind the scenes, purely so both URLs
+     share a root domain with the API itself - `openapi.json` already
+     advertises these proxied URLs by default, so this only matters if
+     you're filling the GPT Builder's fields in by hand instead of
+     trusting the imported schema.
    - Save, then test with a prompt like *"find me somewhere to eat in
      Croydon tonight"* - that hits `searchRestaurants` (no auth needed);
      saving something will prompt the OAuth sign-in the first time.
 
 This whole section was built and REST-verified live (public search,
-every private route's real 401-without-a-token, and a full authenticated
+every private route's real 401-without-a-token, a full authenticated
 save → list → remove round trip using a real disposable Supabase test
-user - see docs/stage-3-verification.md). The GPT Builder click-through in
-step 3 itself has not been run - it needs a real ChatGPT session and the
-OAuth client from step 2, neither of which this environment has.
+user, and the OAuth proxy forwarding both a redirect and a token exchange
+to the real Supabase endpoints - see docs/stage-3-verification.md). The
+GPT Builder click-through in step 3 itself has not been fully completed -
+it needs a real ChatGPT session and the OAuth client from step 2, neither
+of which this environment has; the same-root-domain requirement above was
+discovered from a real attempt, not anticipated in advance.
 
 ## Tools
 

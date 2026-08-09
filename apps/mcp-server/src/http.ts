@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createBiteJoyServer, SERVER_NAME } from "./server.js";
 import { AuthError, extractBearerToken, verifyAccessToken, type VerifiedAuth } from "./auth/index.js";
 import { createRestRouter } from "./rest/routes.js";
+import { createOAuthProxyRouter } from "./rest/oauthProxy.js";
 import { buildOpenApiSchema } from "./rest/openapiSchema.js";
 
 const DEFAULT_PORT = 3333;
@@ -77,6 +78,7 @@ export function createHttpApp(): Express {
   });
 
   app.use(createRestRouter());
+  app.use(createOAuthProxyRouter());
 
   app.post("/mcp", async (req, res) => {
     // Stateless: a fresh server + transport per request avoids cross-request

@@ -3,21 +3,23 @@
  * into a ChatGPT Custom GPT Action. `baseUrl` should be this server's real
  * public origin (the same value MCP_PUBLIC_URL's origin resolves to).
  *
- * OAuth details (authorizationUrl/tokenUrl) point at Supabase's own OAuth
- * Authorization Server endpoints - confirmed live and PKCE(S256)-capable
- * (see docs/mcp-oauth.md), but Supabase has no Dynamic Client Registration,
- * so a client id/secret must be created manually in the Supabase dashboard
- * (Authentication -> the project's OAuth Apps/clients section) before this
- * can actually be wired into a GPT Action - see docs/chatgpt-app.md's
- * "Custom GPT Action (fallback)" section for the exact steps. The scope
- * name below ("email") is the best-documented default, not empirically
- * confirmed against this specific Supabase OAuth Server feature - worth
- * checking against whatever the dashboard's client-creation screen says
- * when that step actually happens.
+ * OAuth details (authorizationUrl/tokenUrl) point at THIS server's own
+ * `/oauth/authorize` and `/oauth/token` - a thin reverse proxy
+ * (./oauthProxy.ts) in front of Supabase's real OAuth Authorization
+ * Server, not Supabase's URLs directly. Confirmed live: the GPT Builder
+ * rejects an Action whose Authorization URL/Token URL don't share a root
+ * domain with the API's own hostname ("Authorization URL, Token URL, and
+ * API hostname must share a root domain"), and Supabase's OAuth server
+ * (`*.supabase.co`) will never share a domain with wherever this API is
+ * hosted - hence the proxy. A client id/secret still has to be created
+ * manually in the Supabase dashboard (no Dynamic Client Registration) -
+ * see docs/chatgpt-app.md's "Custom GPT Action" section for the exact
+ * steps. The scope name below ("email") is the best-documented default,
+ * not empirically confirmed against this specific Supabase OAuth Server
+ * feature - worth checking against whatever the dashboard's
+ * client-creation screen actually calls it.
  */
-export function buildOpenApiSchema(baseUrl: string, supabaseUrl: string | undefined) {
-  const authBase = supabaseUrl ? supabaseUrl.replace(/\/+$/, "") : "https://YOUR-PROJECT.supabase.co";
-
+export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undefined) {
   return {
     openapi: "3.1.0",
     info: {
@@ -128,8 +130,12 @@ export function buildOpenApiSchema(baseUrl: string, supabaseUrl: string | undefi
           type: "oauth2",
           flows: {
             authorizationCode: {
-              authorizationUrl: `${authBase}/auth/v1/oauth/authorize`,
-              tokenUrl: `${authBase}/auth/v1/oauth/token`,
+              // Same root domain as `servers[0].url` above, on purpose -
+              // see this file's header comment. These paths are a proxy
+              // (rest/oauthProxy.ts) in front of Supabase's real OAuth
+              // server, not Supabase's URLs directly.
+              authorizationUrl: `${baseUrl}/oauth/authorize`,
+              tokenUrl: `${baseUrl}/oauth/token`,
               scopes: { email: "Read access to your BiteJoy account" },
             },
           },
