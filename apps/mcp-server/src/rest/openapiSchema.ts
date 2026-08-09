@@ -125,6 +125,12 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
       },
     },
     components: {
+      // ChatGPT's GPT Builder validator expects `components.schemas` to
+      // exist as an object even when nothing uses named/reusable schemas
+      // (every schema here is defined inline instead) - confirmed live: a
+      // real "In components section, schemas subsection is not an object"
+      // rejection from the actual import UI when this key was missing.
+      schemas: {},
       securitySchemes: {
         bitejoyOAuth: {
           type: "oauth2",

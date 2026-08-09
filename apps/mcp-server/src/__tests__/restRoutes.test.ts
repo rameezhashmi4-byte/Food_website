@@ -35,10 +35,20 @@ describe("REST/OpenAPI layer", () => {
   it("serves an OpenAPI 3.1 document describing all four routes", async () => {
     const res = await fetch(`${baseUrl}/openapi.json`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { openapi: string; servers: { url: string }[]; paths: Record<string, unknown> };
+    const body = (await res.json()) as {
+      openapi: string;
+      servers: { url: string }[];
+      paths: Record<string, unknown>;
+      components: { schemas: unknown; securitySchemes: unknown };
+    };
     expect(body.openapi).toBe("3.1.0");
     expect(body.servers[0]?.url).toBe(baseUrl);
     expect(Object.keys(body.paths).sort()).toEqual(["/account/saved", "/restaurants/search", "/restaurants/{id}/save"]);
+    // Regression check: the GPT Builder's real import validator rejected
+    // this schema live with "In components section, schemas subsection is
+    // not an object" when this key was missing entirely.
+    expect(typeof body.components.schemas).toBe("object");
+    expect(body.components.schemas).not.toBeNull();
   });
 
   it("GET /restaurants/search works with no Authorization header at all (public)", async () => {
