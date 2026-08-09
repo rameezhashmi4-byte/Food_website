@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { rankRestaurants } from "@bitejoy/core";
 import type { AppContext } from "../context.js";
-import { SearchCriteriaInputShape } from "../lib/schemas.js";
+import { SearchCriteriaInputShape, type SearchCriteriaInput } from "../lib/schemas.js";
 import { resolveCriteria } from "../lib/resolveCriteria.js";
 import { RestaurantCardViewSchema, toCardView } from "../lib/cardView.js";
 import { buildResultsSummary } from "../lib/personality.js";
@@ -16,6 +17,28 @@ const OutputShape = {
   recommendations: z.array(RestaurantCardViewSchema),
   count: z.number(),
 };
+
+/**
+ * The tool's real logic, factored out so the REST/OpenAPI layer
+ * (rest/routes.ts - built for ChatGPT Custom GPT Actions, since Developer
+ * Mode / MCP connectors aren't available on every ChatGPT plan) calls the
+ * exact same code the MCP tool does, rather than a second implementation
+ * that could drift from this one.
+ */
+export async function performSearchRestaurants(ctx: AppContext, input: SearchCriteriaInput): Promise<CallToolResult> {
+  const { criteria, locationLabel, assumptions } = resolveCriteria(input);
+  const candidates = await ctx.provider.searchRestaurants({ criteria });
+  const recommendations = rankRestaurants(candidates, criteria, { mode: "search" });
+  const cards = recommendations.map((rec) => toCardView(rec));
+
+  const deterministicSummary = buildResultsSummary({ mode: "search", cards, locationLabel, assumptions });
+  const aiSummary = await explainRecommendationsWithAI(cards);
+
+  return {
+    content: [{ type: "text", text: aiSummary ?? deterministicSummary }],
+    structuredContent: { mode: "search" as const, locationLabel, recommendations: cards, count: cards.length },
+  };
+}
 
 export function registerSearchRestaurants(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -34,20 +57,6 @@ export function registerSearchRestaurants(server: McpServer, ctx: AppContext): v
         "openai/toolInvocation/invoked": "Found some places.",
       },
     },
-    async (input) =>
-      toToolResult(async () => {
-        const { criteria, locationLabel, assumptions } = resolveCriteria(input);
-        const candidates = await ctx.provider.searchRestaurants({ criteria });
-        const recommendations = rankRestaurants(candidates, criteria, { mode: "search" });
-        const cards = recommendations.map((rec) => toCardView(rec));
-
-        const deterministicSummary = buildResultsSummary({ mode: "search", cards, locationLabel, assumptions });
-        const aiSummary = await explainRecommendationsWithAI(cards);
-
-        return {
-          content: [{ type: "text", text: aiSummary ?? deterministicSummary }],
-          structuredContent: { mode: "search" as const, locationLabel, recommendations: cards, count: cards.length },
-        };
-      }),
+    async (input) => toToolResult(() => performSearchRestaurants(ctx, input)),
   );
 }

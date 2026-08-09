@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
 import { requireAuthedContext } from "../lib/authGuard.js";
 import { toToolResult, ToolInputError } from "../lib/errors.js";
@@ -11,6 +12,27 @@ const InputShape = {
 };
 
 const OutputShape = { saved: SavedRestaurantViewSchema };
+
+/** Same logic the REST layer (rest/routes.ts) calls - see searchRestaurants.ts's equivalent comment. */
+export async function performSaveRestaurant(
+  ctx: AppContext,
+  input: { restaurantId: string; note?: string },
+): Promise<CallToolResult> {
+  const { userId, repository } = requireAuthedContext(ctx);
+
+  const restaurant = await ctx.provider.getRestaurantById(input.restaurantId);
+  if (!restaurant) {
+    throw new ToolInputError(`I couldn't find a restaurant with id "${input.restaurantId}" - try searching first to get a valid id.`);
+  }
+
+  const record = await repository.saveRestaurant(userId, input.restaurantId, input.note);
+  await repository.recordActivity(userId, "restaurant_saved", { restaurantId: input.restaurantId });
+
+  return {
+    content: [{ type: "text", text: `Saved ${restaurant.name} to your list.` }],
+    structuredContent: { saved: toSavedRestaurantView(record) },
+  };
+}
 
 export function registerSaveRestaurant(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -27,22 +49,6 @@ export function registerSaveRestaurant(server: McpServer, ctx: AppContext): void
         "openai/toolInvocation/invoked": "Saved.",
       },
     },
-    async ({ restaurantId, note }) =>
-      toToolResult(async () => {
-        const { userId, repository } = requireAuthedContext(ctx);
-
-        const restaurant = await ctx.provider.getRestaurantById(restaurantId);
-        if (!restaurant) {
-          throw new ToolInputError(`I couldn't find a restaurant with id "${restaurantId}" - try searching first to get a valid id.`);
-        }
-
-        const record = await repository.saveRestaurant(userId, restaurantId, note);
-        await repository.recordActivity(userId, "restaurant_saved", { restaurantId });
-
-        return {
-          content: [{ type: "text", text: `Saved ${restaurant.name} to your list.` }],
-          structuredContent: { saved: toSavedRestaurantView(record) },
-        };
-      }),
+    async (input) => toToolResult(() => performSaveRestaurant(ctx, input)),
   );
 }

@@ -16,12 +16,14 @@ All run from the repo root against the final integrated tree:
 |---|---|
 | `npm run typecheck` (6 workspaces: core, database, db, chatgpt-app, mcp-server, web) | Clean, 0 errors |
 | `npm run lint` (ESLint, flat config) | Clean, 0 errors, 0 warnings |
-| `npm run test` (vitest: core+database+mcp-server, then chatgpt-app, then web) | **180 passed, 1 skipped**, 0 failed |
+| `npm run test` (vitest: core+database+mcp-server, then chatgpt-app, then web) | **187 passed, 1 skipped**, 0 failed |
 | `npm run build` (all 6 workspaces) | Clean - `tsc` builds, both widget bundles, `next build` |
 | `npm audit` (repo root) | 3 high-severity advisories, all transitive inside `next`'s own bundled `postgres`/`sharp` (image optimization) - see "Known gaps" below |
 
 The 1 skipped test is `packages/database/src/__tests__/supabaseRepository.live.test.ts`
-- see "RLS cross-user isolation" below for exactly why.
+when run without live Supabase env vars loaded (the default for a plain
+`npm run test`) - see "RLS cross-user isolation" below, where the same
+suite genuinely ran and passed with those env vars present.
 
 ## What was genuinely live-tested (real network calls, real services)
 
@@ -72,37 +74,64 @@ The 1 skipped test is `packages/database/src/__tests__/supabaseRepository.live.t
 - **Google Places API and OpenAI** - live-tested during Stage 2.5 (see
   `packages/core/src/providers/googlePlacesProvider.ts`'s header comment
   and `docs/chatgpt-app.md`); unchanged in Stage 3.
+- **Migrations 0008-0013 applied to the live Supabase project**, via the
+  Supabase SQL Editor (this environment has no `psql`/connection
+  string/personal access token, so this one step was necessarily done by
+  hand - see [docs/supabase-setup.md](./supabase-setup.md)). Two real bugs
+  surfaced and were fixed only because this was run for real, not just
+  reasoned about: `occasion` had never actually been created as a Postgres
+  enum type despite migration 0008's original comment claiming otherwise,
+  and two `drop constraint` statements assumed Postgres's default
+  auto-naming convention, which didn't match what was actually live -
+  both now look the constraint up by its definition content instead of a
+  guessed name. Migration 0013 (new) fixes a third, unrelated live bug
+  found in the process: `restaurants`/`menu_items`/`offers`/
+  `review_summaries`/`restaurant_opening_hours` had no RLS or grants at
+  all since Stage 1, silently blocking every read for both `anon` and
+  `authenticated` - confirmed by a live anon-key request returning zero
+  rows despite seeded data existing, contradicting a code comment that
+  assumed public access already worked.
+- **Seed data** (`npm run seed -w @bitejoy/db`) - ran for real against the
+  live project once the schema was in place: 18 fictional restaurants
+  seeded, then confirmed independently readable via a live anon-key REST
+  request (not just "the seed script exited 0").
+- **The full product loop through a real, publicly-reachable MCP server.**
+  `npm run dev:http`, exposed via a Cloudflare quick tunnel, with a real
+  `tools/call` round trip for `search_restaurants` returning real seeded
+  restaurants with an AI-written summary - confirmed through the public
+  tunnel URL, not just localhost.
+- **The REST/OpenAPI Custom GPT Action layer**
+  (`apps/mcp-server/src/rest/`), built after confirming live that MCP
+  Developer Mode genuinely isn't available on the account this is being
+  built for. `GET /restaurants/search` verified public and working
+  through the same tunnel; every private route (`POST`/`DELETE
+  /restaurants/:id/save`, `GET /account/saved`) verified to return a real
+  `401` with no/invalid token; and a **full authenticated round trip**
+  (save → list → remove) run against the real Supabase project using a
+  real disposable test user created via the Admin API and deleted
+  immediately after - not mocked.
 
 ## What was NOT live-tested
 
-- **A real ChatGPT client completing OAuth and calling a private tool.**
-  Supabase's OAuth AS endpoints are live and support PKCE, but Dynamic
-  Client Registration isn't available (`/auth/v1/oauth/register` → 404),
-  so a real connection needs a manually pre-registered OAuth client in the
-  Supabase dashboard - not set up in this environment. `save_restaurant`
-  and friends are implemented and unit/integration-tested (fake
-  repository, real auth-guard logic), never called by an actual ChatGPT
-  session.
+- **A real ChatGPT client completing MCP OAuth and calling a private
+  tool**, or **the Custom GPT Action's OAuth flow through the GPT
+  Builder UI.** Both need a real ChatGPT session; the Action additionally
+  needs an OAuth client manually registered in the Supabase dashboard
+  (Dynamic Client Registration isn't available -
+  `/auth/v1/oauth/register` → 404) - see docs/chatgpt-app.md's "Custom GPT
+  Action" section for the exact remaining steps. `save_restaurant` and
+  friends are implemented and tested at every other layer (fake
+  repository, real auth-guard logic, and now a real live-Supabase round
+  trip over both MCP-shaped and REST-shaped calls); only the actual
+  ChatGPT-side click-through is unverified.
 - **Live browser click-through for Google/Microsoft OAuth.** The e2e run
   confirmed both buttons render correctly and are enabled (i.e. Supabase
   reports both providers as configured), but never completed a real
   Google/Microsoft consent screen - that needs a real Google/Microsoft
   account making an interactive choice, which no automated run here can
   do.
-- **Migrations 0008-0012 applied to the live Supabase project.** This
-  environment has no `psql`, no Postgres connection string, and no
-  Supabase personal access token - only the project's REST/Auth API keys
-  (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`), which
-  cannot authenticate a CLI `db push` or a direct SQL connection. Confirmed
-  by directly checking the live schema at runtime (see next section) - the
-  extended columns these migrations add are not yet present. **Applying
-  them via the Supabase SQL Editor is a manual step outside this
-  environment** (see [docs/supabase-setup.md](./supabase-setup.md)).
-- **Seed data** (`npm run seed -w @bitejoy/db`) - not run against the live
-  project this session, for the same reason: it depends on the schema
-  migrations being applied first.
 
-## RLS cross-user isolation - written, ready, not yet run for real
+## RLS cross-user isolation - run for real, passed
 
 `packages/database/src/__tests__/supabaseRepository.live.test.ts` is a
 genuinely rigorous live test: it creates two real Supabase Auth users,
@@ -114,16 +143,14 @@ that an RLS policy exists, it tries the forbidden read/write and asserts
 Postgres rejects it. Both test users are deleted in `afterAll` regardless
 of outcome.
 
-It detects schema readiness at runtime (queries for
-`user_preferences.search_radius_km` and `user_activity`) rather than
-assuming, and **self-skips when the schema isn't migrated yet** - which is
-exactly what happened when it was run standalone against the live project
-in this session: `1 skipped`, confirming migrations 0008-0010 genuinely
-haven't been applied to production yet. This test is real, ready evidence
-waiting to run the moment the migrations are applied - RLS isolation
-itself has NOT been confirmed live in Stage 3, only designed, migrated
-(on paper), and covered by a test that will prove it the first time
-someone runs it with the schema in place.
+It detects schema readiness at runtime rather than assuming, and
+self-skips when the schema isn't migrated yet - true earlier in Stage 3
+(confirmed: `1 skipped` against the live project, before migrations
+0008-0013 were applied). **Once the schema was live, this suite was run
+for real with real Supabase credentials loaded: 10/10 passed**, including
+every cross-user isolation check (profile read/overwrite/delete rejected,
+saved-restaurant insert rejected) against the actual production RLS
+policies, not a mock.
 
 ## Known gaps and accepted risks
 

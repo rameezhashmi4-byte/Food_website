@@ -3,6 +3,8 @@ import express, { type Express, type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createBiteJoyServer, SERVER_NAME } from "./server.js";
 import { AuthError, extractBearerToken, verifyAccessToken, type VerifiedAuth } from "./auth/index.js";
+import { createRestRouter } from "./rest/routes.js";
+import { buildOpenApiSchema } from "./rest/openapiSchema.js";
 
 const DEFAULT_PORT = 3333;
 
@@ -64,6 +66,17 @@ export function createHttpApp(): Express {
       authorization_servers: authorizationServer ? [authorizationServer] : [],
     });
   });
+
+  // OpenAPI schema for a ChatGPT Custom GPT Action - the fallback path when
+  // MCP connectors / Developer Mode aren't available on a given ChatGPT
+  // plan (see rest/openapiSchema.ts and docs/chatgpt-app.md). Same origin
+  // as the MCP resource URL above, so both "servers" entries always agree.
+  app.get("/openapi.json", (_req, res) => {
+    const origin = new URL(resourceUrl).origin;
+    res.json(buildOpenApiSchema(origin, process.env.SUPABASE_URL));
+  });
+
+  app.use(createRestRouter());
 
   app.post("/mcp", async (req, res) => {
     // Stateless: a fresh server + transport per request avoids cross-request

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
 import { requireAuthedContext } from "../lib/authGuard.js";
 import { toToolResult } from "../lib/errors.js";
@@ -9,6 +10,19 @@ const InputShape = {
 };
 
 const OutputShape = { removed: z.boolean() };
+
+/** Same logic the REST layer (rest/routes.ts) calls - see searchRestaurants.ts's equivalent comment. */
+export async function performRemoveSavedRestaurant(ctx: AppContext, input: { restaurantId: string }): Promise<CallToolResult> {
+  const { userId, repository } = requireAuthedContext(ctx);
+
+  await repository.removeSavedRestaurant(userId, input.restaurantId);
+  await repository.recordActivity(userId, "restaurant_removed", { restaurantId: input.restaurantId });
+
+  return {
+    content: [{ type: "text", text: "Removed from your saved list." }],
+    structuredContent: { removed: true },
+  };
+}
 
 export function registerRemoveSavedRestaurant(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -25,17 +39,6 @@ export function registerRemoveSavedRestaurant(server: McpServer, ctx: AppContext
         "openai/toolInvocation/invoked": "Removed.",
       },
     },
-    async ({ restaurantId }) =>
-      toToolResult(async () => {
-        const { userId, repository } = requireAuthedContext(ctx);
-
-        await repository.removeSavedRestaurant(userId, restaurantId);
-        await repository.recordActivity(userId, "restaurant_removed", { restaurantId });
-
-        return {
-          content: [{ type: "text", text: "Removed from your saved list." }],
-          structuredContent: { removed: true },
-        };
-      }),
+    async (input) => toToolResult(() => performRemoveSavedRestaurant(ctx, input)),
   );
 }

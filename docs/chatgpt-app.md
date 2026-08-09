@@ -221,6 +221,70 @@ MCP `tools/call` over HTTPS" can still be verified without it - do that,
 document exactly which parts you verified, and leave the ChatGPT-side steps
 as an explicit manual checklist rather than claiming they were run.
 
+## Custom GPT Action (fallback when Developer Mode isn't available)
+
+MCP connectors / Developer Mode are not available on every ChatGPT
+plan/account - confirmed on a live account during Stage 3, not assumed.
+When that's the case, the same server also exposes a plain REST +
+OpenAPI 3.1 surface (`apps/mcp-server/src/rest/`) built for ChatGPT's
+older "Custom GPT" Actions system instead. This is a second *transport*
+for identical behavior, not a second implementation - every REST route
+calls the exact same `perform*` function the equivalent MCP tool does
+(see `src/tools/*.ts`), so there's nothing to keep in sync by hand.
+
+**Endpoints** (same origin as the `/mcp` endpoint):
+
+| Route | Auth | Same as MCP tool |
+| --- | --- | --- |
+| `GET /restaurants/search?location=...` | none (public) | `search_restaurants` |
+| `POST /restaurants/{id}/save` | Bearer token | `save_restaurant` |
+| `DELETE /restaurants/{id}/save` | Bearer token | `remove_saved_restaurant` |
+| `GET /account/saved` | Bearer token | `list_saved_restaurants` |
+| `GET /openapi.json` | none | the schema itself, for import into a GPT Action |
+
+Unlike the MCP transport (where a missing/invalid token still returns a
+`200` with an in-band "please sign in" message, since most MCP tools are
+public), every private REST route returns a real `401` with no token -
+that's what lets a GPT Action's configured OAuth flow actually trigger
+instead of silently doing nothing.
+
+### Setting it up
+
+1. **Deploy the server somewhere with a real public URL** (Railway/Fly -
+   see `fly.toml`/`railway.json` at the repo root) or use a tunnel for
+   testing, same as the MCP setup above. `MCP_PUBLIC_URL` must be set so
+   `/openapi.json`'s `servers` entry matches the real reachable origin.
+2. **Register an OAuth client in the Supabase dashboard.** Supabase's
+   project already runs a real OAuth 2.1 Authorization Server (confirmed
+   live: PKCE-S256-capable `/auth/v1/oauth/authorize` and
+   `/auth/v1/oauth/token` endpoints - see docs/mcp-oauth.md) - but it has
+   no Dynamic Client Registration, so a client id/secret has to be created
+   by hand: Supabase Dashboard → Authentication → find the OAuth
+   Apps/clients section → create a new app. You'll need ChatGPT's redirect
+   URI for this specific Action, which ChatGPT only shows you once you
+   start step 3 below - do that first if the dashboard asks for it up
+   front, then come back and finish this step.
+3. **In ChatGPT: Create a GPT → Configure → Actions → Create new action.**
+   - Import from URL: `<your-server-url>/openapi.json`
+   - Authentication: OAuth
+     - Client ID / Client Secret: from step 2
+     - Authorization URL: `<SUPABASE_URL>/auth/v1/oauth/authorize`
+     - Token URL: `<SUPABASE_URL>/auth/v1/oauth/token`
+     - Scope: whatever the dashboard's client-creation screen in step 2
+       actually calls it (`email` is `rest/openapiSchema.ts`'s best-guess
+       default, not empirically confirmed against this specific Supabase
+       feature - worth checking against the real screen)
+   - Save, then test with a prompt like *"find me somewhere to eat in
+     Croydon tonight"* - that hits `searchRestaurants` (no auth needed);
+     saving something will prompt the OAuth sign-in the first time.
+
+This whole section was built and REST-verified live (public search,
+every private route's real 401-without-a-token, and a full authenticated
+save → list → remove round trip using a real disposable Supabase test
+user - see docs/stage-3-verification.md). The GPT Builder click-through in
+step 3 itself has not been run - it needs a real ChatGPT session and the
+OAuth client from step 2, neither of which this environment has.
+
 ## Tools
 
 | Tool | Purpose |

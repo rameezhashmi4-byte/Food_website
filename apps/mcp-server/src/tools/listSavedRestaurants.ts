@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
 import { requireAuthedContext } from "../lib/authGuard.js";
 import { toToolResult } from "../lib/errors.js";
@@ -26,6 +27,43 @@ const OutputShape = {
   nextCursor: z.string().optional(),
 };
 
+/** Same logic the REST layer (rest/routes.ts) calls - see searchRestaurants.ts's equivalent comment. */
+export async function performListSavedRestaurants(
+  ctx: AppContext,
+  input: { limit?: number; cursor?: string },
+): Promise<CallToolResult> {
+  const { userId, repository } = requireAuthedContext(ctx);
+  const page = await repository.listSavedRestaurants(userId, { limit: input.limit ?? DEFAULT_LIMIT, cursor: input.cursor });
+
+  // A saved restaurant can, in principle, have since been removed
+  // from the catalog - skip it rather than erroring the whole list,
+  // same "never invent data" spirit as the rest of the tools.
+  const items = (
+    await Promise.all(
+      page.items.map(async (saved) => {
+        const restaurant = await ctx.provider.getRestaurantById(saved.restaurantId);
+        if (!restaurant) return undefined;
+        return {
+          restaurantId: saved.restaurantId,
+          note: saved.note,
+          savedAt: saved.createdAt,
+          restaurant: toDetailView(restaurant),
+        };
+      }),
+    )
+  ).filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+
+  const summary =
+    items.length === 0
+      ? "You haven't saved any restaurants yet."
+      : `You have ${items.length} saved restaurant${items.length === 1 ? "" : "s"} on this page: ${items.map((i) => i.restaurant.name).join(", ")}.`;
+
+  return {
+    content: [{ type: "text", text: summary }],
+    structuredContent: { items, count: items.length, nextCursor: page.nextCursor },
+  };
+}
+
 export function registerListSavedRestaurants(server: McpServer, ctx: AppContext): void {
   server.registerTool(
     "list_saved_restaurants",
@@ -41,38 +79,6 @@ export function registerListSavedRestaurants(server: McpServer, ctx: AppContext)
         "openai/toolInvocation/invoked": "Here's your list.",
       },
     },
-    async ({ limit, cursor }) =>
-      toToolResult(async () => {
-        const { userId, repository } = requireAuthedContext(ctx);
-        const page = await repository.listSavedRestaurants(userId, { limit: limit ?? DEFAULT_LIMIT, cursor });
-
-        // A saved restaurant can, in principle, have since been removed
-        // from the catalog - skip it rather than erroring the whole list,
-        // same "never invent data" spirit as the rest of the tools.
-        const items = (
-          await Promise.all(
-            page.items.map(async (saved) => {
-              const restaurant = await ctx.provider.getRestaurantById(saved.restaurantId);
-              if (!restaurant) return undefined;
-              return {
-                restaurantId: saved.restaurantId,
-                note: saved.note,
-                savedAt: saved.createdAt,
-                restaurant: toDetailView(restaurant),
-              };
-            }),
-          )
-        ).filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
-
-        const summary =
-          items.length === 0
-            ? "You haven't saved any restaurants yet."
-            : `You have ${items.length} saved restaurant${items.length === 1 ? "" : "s"} on this page: ${items.map((i) => i.restaurant.name).join(", ")}.`;
-
-        return {
-          content: [{ type: "text", text: summary }],
-          structuredContent: { items, count: items.length, nextCursor: page.nextCursor },
-        };
-      }),
+    async (input) => toToolResult(() => performListSavedRestaurants(ctx, input)),
   );
 }
