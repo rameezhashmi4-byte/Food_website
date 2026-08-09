@@ -5,6 +5,7 @@ import { performSearchRestaurants } from "../tools/searchRestaurants.js";
 import { performSaveRestaurant } from "../tools/saveRestaurant.js";
 import { performRemoveSavedRestaurant } from "../tools/removeSavedRestaurant.js";
 import { performListSavedRestaurants } from "../tools/listSavedRestaurants.js";
+import { toToolResult } from "../lib/errors.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /**
@@ -79,7 +80,13 @@ export function createRestRouter(): Router {
         return;
       }
       const ctx = createAppContext();
-      const result = await performSearchRestaurants(ctx, input);
+      // toToolResult here matters, not just style: performSearchRestaurants
+      // throws ToolInputError directly (e.g. an unrecognised location) -
+      // without this wrapper that exception falls through to the generic
+      // catch below and becomes a misleading 500 instead of the intended
+      // clean 400 with the actual helpful message. Confirmed live: this
+      // was a real bug, not a hypothetical one - see git history.
+      const result = await toToolResult(() => performSearchRestaurants(ctx, input));
       sendToolResult(res, result);
     } catch (error) {
       sendUnexpectedError(res, error, "GET /restaurants/search");
@@ -93,7 +100,7 @@ export function createRestRouter(): Router {
       if (!auth) return;
       const note = typeof req.body?.note === "string" ? req.body.note : undefined;
       const ctx = createAppContext({ auth });
-      const result = await performSaveRestaurant(ctx, { restaurantId: req.params.id, note });
+      const result = await toToolResult(() => performSaveRestaurant(ctx, { restaurantId: req.params.id, note }));
       sendToolResult(res, result);
     } catch (error) {
       sendUnexpectedError(res, error, "POST /restaurants/:id/save");
@@ -105,7 +112,7 @@ export function createRestRouter(): Router {
       const auth = await requireRestAuth(req, res);
       if (!auth) return;
       const ctx = createAppContext({ auth });
-      const result = await performRemoveSavedRestaurant(ctx, { restaurantId: req.params.id });
+      const result = await toToolResult(() => performRemoveSavedRestaurant(ctx, { restaurantId: req.params.id }));
       sendToolResult(res, result);
     } catch (error) {
       sendUnexpectedError(res, error, "DELETE /restaurants/:id/save");
@@ -118,10 +125,12 @@ export function createRestRouter(): Router {
       if (!auth) return;
       const q = req.query;
       const ctx = createAppContext({ auth });
-      const result = await performListSavedRestaurants(ctx, {
-        limit: q.limit ? Number(q.limit) : undefined,
-        cursor: typeof q.cursor === "string" ? q.cursor : undefined,
-      });
+      const result = await toToolResult(() =>
+        performListSavedRestaurants(ctx, {
+          limit: q.limit ? Number(q.limit) : undefined,
+          cursor: typeof q.cursor === "string" ? q.cursor : undefined,
+        }),
+      );
       sendToolResult(res, result);
     } catch (error) {
       sendUnexpectedError(res, error, "GET /account/saved");

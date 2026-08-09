@@ -66,6 +66,14 @@ describe("REST/OpenAPI layer", () => {
     expect(body.error).toContain("location");
   });
 
+  it("GET /restaurants/search with a location the fictional dataset doesn't cover is a clean 400 with a helpful message, not a 500 (regression: performSearchRestaurants's thrown ToolInputError wasn't being caught by this route)", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/search?location=SM5%201NL`);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("SM5 1NL");
+    expect(body.error).not.toContain("something went wrong");
+  });
+
   it("POST /restaurants/:id/save with no Authorization header is a real 401", async () => {
     const res = await fetch(`${baseUrl}/restaurants/r_flame_fork/save`, { method: "POST" });
     expect(res.status).toBe(401);
