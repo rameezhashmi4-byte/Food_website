@@ -20,7 +20,7 @@ const OutputShape = {
 
 /** Same logic the REST layer (rest/routes.ts) calls - see tools/searchRestaurants.ts's equivalent comment. */
 export async function performFindHiddenGems(ctx: AppContext, input: SearchCriteriaInput): Promise<CallToolResult> {
-  const { criteria, locationLabel, assumptions } = resolveCriteria({ ...input, prioritiseIndependent: true });
+  const { criteria, locationLabel, assumptions } = await resolveCriteria(ctx.provider, { ...input, prioritiseIndependent: true });
   const candidates = await ctx.provider.searchRestaurants({ criteria });
   const recommendations = rankRestaurants(candidates, criteria, { mode: "hidden_gem" });
   const cards = recommendations.map((rec) => toCardView(rec));

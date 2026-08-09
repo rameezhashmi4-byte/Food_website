@@ -34,7 +34,7 @@ export async function performCompareRestaurants(
 ): Promise<CallToolResult> {
   const { restaurantIds, ...criteriaInput } = input;
   const uniqueIds = Array.from(new Set(restaurantIds));
-  const { criteria, locationLabel } = resolveCriteria(criteriaInput);
+  const { criteria, locationLabel } = await resolveCriteria(ctx.provider, criteriaInput);
 
   const restaurants = await Promise.all(uniqueIds.map((id) => ctx.provider.getRestaurantById(id)));
   const missing = uniqueIds.filter((_, i) => !restaurants[i]);

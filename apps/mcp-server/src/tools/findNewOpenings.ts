@@ -36,7 +36,7 @@ export function registerFindNewOpenings(server: McpServer, ctx: AppContext): voi
     },
     async (input) =>
       toToolResult(async () => {
-        const { criteria, locationLabel, assumptions } = resolveCriteria(input);
+        const { criteria, locationLabel, assumptions } = await resolveCriteria(ctx.provider, input);
         const candidates = await ctx.provider.searchRestaurants({ criteria });
         const newOpenings = candidates.filter((restaurant) => isNewOpening(restaurant));
         const recommendations = rankRestaurants(newOpenings, criteria, { mode: "food_adventure" });

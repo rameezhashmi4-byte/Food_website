@@ -26,7 +26,7 @@ const OutputShape = {
  * that could drift from this one.
  */
 export async function performSearchRestaurants(ctx: AppContext, input: SearchCriteriaInput): Promise<CallToolResult> {
-  const { criteria, locationLabel, assumptions } = resolveCriteria(input);
+  const { criteria, locationLabel, assumptions } = await resolveCriteria(ctx.provider, input);
   const candidates = await ctx.provider.searchRestaurants({ criteria });
   const recommendations = rankRestaurants(candidates, criteria, { mode: "search" });
   const cards = recommendations.map((rec) => toCardView(rec));

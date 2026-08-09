@@ -34,7 +34,7 @@ export function registerSurpriseMe(server: McpServer, ctx: AppContext): void {
     },
     async (input) =>
       toToolResult(async () => {
-        const { criteria, locationLabel } = resolveCriteria(input);
+        const { criteria, locationLabel } = await resolveCriteria(ctx.provider, input);
         const candidates = await ctx.provider.searchRestaurants({ criteria });
         const pick = pickSurprise(candidates, criteria);
 

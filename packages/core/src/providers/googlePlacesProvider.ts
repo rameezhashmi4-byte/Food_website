@@ -1,6 +1,6 @@
 import type { Cuisine, Facility, PriceLevel, Weekday } from "../types/common.js";
 import type { OpeningHoursInterval, Restaurant } from "../types/restaurant.js";
-import type { ProviderSearchParams, RestaurantProvider } from "./types.js";
+import type { ProviderSearchParams, ResolvedLocation, RestaurantProvider } from "./types.js";
 
 /**
  * Adapter for the Google Places API (New), intended to run only in a
@@ -22,10 +22,20 @@ import type { ProviderSearchParams, RestaurantProvider } from "./types.js";
  * `priceLevel` (clearly marked unverified) or left empty rather than
  * invented. Everything this adapter returns has `meta.isVerified = false`
  * until a human or a trusted second source confirms it.
+ *
+ * `resolveLocation` calls Google's Geocoding API directly - genuinely
+ * worldwide, with no country/region restriction or bounding box baked in -
+ * so free-text search location (any place name, address or postcode on
+ * Earth) never depends on the small UK-only gazetteer that backs the
+ * fictional demo provider. `searchRestaurants` itself only ever takes
+ * coordinates (via `criteria.location`), so it was never UK-restricted
+ * either; the caller (`resolveCriteria`) is what decides which resolver to
+ * use based on the active provider.
  */
 
 const PLACES_SEARCH_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby";
 const PLACES_PHOTO_MEDIA_URL = "https://places.googleapis.com/v1";
+const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 
 const FIELD_MASK = [
   "places.id",
@@ -155,6 +165,16 @@ interface GoogleSearchNearbyResponse {
   places?: GooglePlace[];
 }
 
+interface GoogleGeocodeResult {
+  formatted_address: string;
+  geometry: { location: { lat: number; lng: number } };
+}
+
+interface GoogleGeocodeResponse {
+  status: string;
+  results?: GoogleGeocodeResult[];
+}
+
 export interface GooglePlacesProviderConfig {
   apiKey: string;
   fetchImpl?: typeof fetch;
@@ -222,6 +242,44 @@ export class GooglePlacesProvider implements RestaurantProvider {
     }
     const place = (await response.json()) as GooglePlace;
     return this.toRestaurant(place);
+  }
+
+  /**
+   * Resolves any free-text location - a place name, address or postcode,
+   * anywhere in the world - to coordinates via Google's Geocoding API.
+   * Deliberately passes no `region` or `components` country restriction: an
+   * unrestricted call is what makes this genuinely worldwide rather than
+   * biased toward wherever BiteJoy's demo data happens to live. Returns
+   * `undefined` (never throws) when Google simply has no match, so callers
+   * can turn that into a normal "I don't recognise that place" response.
+   */
+  async resolveLocation(text: string): Promise<ResolvedLocation | undefined> {
+    if (!this.apiKey) {
+      throw new Error("GooglePlacesProvider requires an API key (set GOOGLE_PLACES_API_KEY)");
+    }
+
+    const url = new URL(GEOCODE_URL);
+    url.searchParams.set("address", text);
+    url.searchParams.set("key", this.apiKey);
+
+    const response = await this.fetchImpl(url.toString());
+    if (!response.ok) {
+      throw new Error(`Google geocoding failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as GoogleGeocodeResponse;
+    if (data.status === "ZERO_RESULTS") return undefined;
+    if (data.status !== "OK") {
+      throw new Error(`Google geocoding failed: ${data.status}`);
+    }
+
+    const result = data.results?.[0];
+    if (!result) return undefined;
+
+    return {
+      label: result.formatted_address,
+      coordinates: { lat: result.geometry.location.lat, lng: result.geometry.location.lng },
+    };
   }
 
   private toRestaurant(place: GooglePlace): Restaurant {

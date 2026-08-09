@@ -20,7 +20,7 @@ const OutputShape = {
 
 /** Same logic the REST layer (rest/routes.ts) calls - see tools/searchRestaurants.ts's equivalent comment. */
 export async function performFindCurrentOffers(ctx: AppContext, input: SearchCriteriaInput): Promise<CallToolResult> {
-  const { criteria, locationLabel, assumptions } = resolveCriteria({ ...input, wantsOffers: true });
+  const { criteria, locationLabel, assumptions } = await resolveCriteria(ctx.provider, { ...input, wantsOffers: true });
   const candidates = await ctx.provider.searchRestaurants({ criteria });
   const recommendations = rankRestaurants(candidates, criteria, { mode: "offers_near_me" });
   const cards = recommendations.map((rec) => toCardView(rec));

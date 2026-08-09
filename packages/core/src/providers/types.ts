@@ -1,4 +1,4 @@
-import type { DataSourceName } from "../types/common.js";
+import type { Coordinates, DataSourceName } from "../types/common.js";
 import type { Restaurant } from "../types/restaurant.js";
 import type { SearchCriteria } from "../types/search.js";
 
@@ -6,6 +6,12 @@ export interface ProviderSearchParams {
   criteria: SearchCriteria;
   /** Soft cap on candidates a provider should return before scoring narrows it down. */
   limit?: number;
+}
+
+/** A free-text location resolved to real-world coordinates, plus a human-readable label for it. */
+export interface ResolvedLocation {
+  label: string;
+  coordinates: Coordinates;
 }
 
 /**
@@ -26,4 +32,17 @@ export interface RestaurantProvider {
   searchRestaurants(params: ProviderSearchParams): Promise<Restaurant[]>;
 
   getRestaurantById(id: string): Promise<Restaurant | undefined>;
+
+  /**
+   * Resolve free-text location input (an area, address, postcode or place
+   * name) into real-world coordinates, using this provider's own source of
+   * truth. Optional: only providers backed by genuine geocoding (e.g.
+   * `GooglePlacesProvider`) implement this, so they can support any
+   * worldwide location. Providers backed by fixed/demo data (e.g.
+   * `FictionalRestaurantProvider`) omit it entirely - callers must fall back
+   * to a bounded local gazetteer that matches whatever the fixed dataset
+   * actually covers, rather than pretending fixed demo data is a worldwide
+   * search.
+   */
+  resolveLocation?(text: string): Promise<ResolvedLocation | undefined>;
 }
