@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
 import { UserPreferencesSchema, type UserPreferences } from "../repository/types.js";
 import { requireAuthedContext } from "../lib/authGuard.js";
@@ -9,6 +10,23 @@ const OutputShape = {
   preferences: UserPreferencesSchema,
   isDefault: z.boolean().describe("True if nothing has been saved yet and these are empty defaults, not a real saved record."),
 };
+
+/** Same logic the REST layer (rest/routes.ts) calls - see tools/searchRestaurants.ts's equivalent comment. */
+export async function performGetUserPreferences(ctx: AppContext): Promise<CallToolResult> {
+  const { userId, repository } = requireAuthedContext(ctx);
+  const saved = await repository.getPreferences(userId);
+  const preferences = saved ?? emptyPreferences(userId);
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: saved ? "Here are your saved preferences." : "You haven't saved any preferences yet - here are the defaults.",
+      },
+    ],
+    structuredContent: { preferences, isDefault: !saved },
+  };
+}
 
 export function registerGetUserPreferences(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -25,22 +43,7 @@ export function registerGetUserPreferences(server: McpServer, ctx: AppContext): 
         "openai/toolInvocation/invoked": "Got your preferences.",
       },
     },
-    async () =>
-      toToolResult(async () => {
-        const { userId, repository } = requireAuthedContext(ctx);
-        const saved = await repository.getPreferences(userId);
-        const preferences = saved ?? emptyPreferences(userId);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: saved ? "Here are your saved preferences." : "You haven't saved any preferences yet - here are the defaults.",
-            },
-          ],
-          structuredContent: { preferences, isDefault: !saved },
-        };
-      }),
+    async () => toToolResult(() => performGetUserPreferences(ctx)),
   );
 }
 

@@ -19,6 +19,18 @@
  * feature - worth checking against whatever the dashboard's
  * client-creation screen actually calls it.
  */
+/** Shared by searchRestaurants/findHiddenGems/findCurrentOffers/compareRestaurants - same underlying SearchCriteriaInput fields. */
+const CRITERIA_PARAMETERS = [
+  { name: "location", in: "query", required: true, schema: { type: "string" }, description: 'Area, postcode or place name, e.g. "Croydon".' },
+  { name: "dateTime", in: "query", required: false, schema: { type: "string" }, description: 'ISO datetime, or a natural phrase like "tonight", "Friday 7pm".' },
+  { name: "partySize", in: "query", required: false, schema: { type: "integer", minimum: 1 } },
+  { name: "budgetPerPersonGbp", in: "query", required: false, schema: { type: "number" } },
+  { name: "totalBudgetGbp", in: "query", required: false, schema: { type: "number" } },
+  { name: "radiusKm", in: "query", required: false, schema: { type: "number" } },
+  { name: "wantsOffers", in: "query", required: false, schema: { type: "boolean" } },
+  { name: "prioritiseIndependent", in: "query", required: false, schema: { type: "boolean" } },
+] as const;
+
 export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undefined) {
   return {
     openapi: "3.1.0",
@@ -43,16 +55,7 @@ GROUNDING RULES - apply to every operation below, not just searchRestaurants:
           description:
             "Returns the ONLY restaurants you may recommend for this request - a curated, already-scored list, not a generic listing. Every fact in the response (price, rating, opening status, offers, distance) is verified as of the response's own data-freshness fields. Do not add, substitute, or supplement with restaurants from your own knowledge, even ones you're confident are real and nearby - if it's not in this response, don't mention it. On any error or empty result, see this schema's top-level description for exactly what to tell the user.",
           security: [],
-          parameters: [
-            { name: "location", in: "query", required: true, schema: { type: "string" }, description: 'Area, postcode or place name, e.g. "Croydon".' },
-            { name: "dateTime", in: "query", required: false, schema: { type: "string" }, description: 'ISO datetime, or a natural phrase like "tonight", "Friday 7pm".' },
-            { name: "partySize", in: "query", required: false, schema: { type: "integer", minimum: 1 } },
-            { name: "budgetPerPersonGbp", in: "query", required: false, schema: { type: "number" } },
-            { name: "totalBudgetGbp", in: "query", required: false, schema: { type: "number" } },
-            { name: "radiusKm", in: "query", required: false, schema: { type: "number" } },
-            { name: "wantsOffers", in: "query", required: false, schema: { type: "boolean" } },
-            { name: "prioritiseIndependent", in: "query", required: false, schema: { type: "boolean" } },
-          ],
+          parameters: CRITERIA_PARAMETERS,
           responses: {
             "200": {
               description:
@@ -80,6 +83,78 @@ GROUNDING RULES - apply to every operation below, not just searchRestaurants:
               description:
                 "The search failed on the server side. Tell the user the restaurant search is temporarily unavailable and ask them to retry shortly - do not recommend any restaurant from your own knowledge as a substitute.",
             },
+          },
+        },
+      },
+      "/restaurants/hidden-gems": {
+        get: {
+          operationId: "findHiddenGems",
+          summary: "Find lesser-known, independent restaurants matching the same search criteria as searchRestaurants",
+          description:
+            "Same grounding rules as searchRestaurants apply: the response is the complete set of restaurants you may mention. Weighs independence/obscurity but never recommends a poorly-rated place just because it's obscure.",
+          security: [],
+          parameters: CRITERIA_PARAMETERS,
+          responses: {
+            "200": {
+              description: "Hidden gems found - the complete set you may mention.",
+              content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, locationLabel: { type: "string" }, count: { type: "integer" }, recommendations: { type: "array", items: { type: "object" } } } } } },
+            },
+            "400": { description: "The search failed. Tell the user and ask them to retry - do not suggest a fallback from your own knowledge.", content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } } },
+            "5XX": { description: "Failed server-side. Tell the user and ask them to retry - do not suggest a fallback from your own knowledge." },
+          },
+        },
+      },
+      "/restaurants/offers": {
+        get: {
+          operationId: "findCurrentOffers",
+          summary: "Find restaurants with a currently valid offer, matching the same search criteria as searchRestaurants",
+          description:
+            "Every offer in the response has already been checked against its validity window - expired offers are excluded automatically. Never state an offer exists, or describe its terms, unless it's present in this response.",
+          security: [],
+          parameters: CRITERIA_PARAMETERS,
+          responses: {
+            "200": {
+              description: "Restaurants with a current offer - the complete set you may mention.",
+              content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, locationLabel: { type: "string" }, count: { type: "integer" }, recommendations: { type: "array", items: { type: "object" } } } } } },
+            },
+            "400": { description: "The search failed. Tell the user and ask them to retry - do not suggest a fallback from your own knowledge.", content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } } },
+            "5XX": { description: "Failed server-side. Tell the user and ask them to retry - do not suggest a fallback from your own knowledge." },
+          },
+        },
+      },
+      "/restaurants/compare": {
+        get: {
+          operationId: "compareRestaurants",
+          summary: "Compare 2-4 specific restaurants side by side, using the same search criteria used to find them",
+          description:
+            "Every fact in the comparison (score, price, distance, atmosphere, offers, dietary suitability, and which one wins each category) comes only from this response - never state a comparison winner or trade-off that isn't explicitly returned here.",
+          security: [],
+          parameters: [
+            { name: "ids", in: "query", required: true, schema: { type: "string" }, description: 'Comma-separated list of 2-4 restaurant ids from a prior searchRestaurants/findHiddenGems/findCurrentOffers response, e.g. "r_flame_fork,r_spice_junction".' },
+            ...CRITERIA_PARAMETERS,
+          ],
+          responses: {
+            "200": {
+              description: "The comparison - the only facts and category winners you may state.",
+              content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, locationLabel: { type: "string" }, items: { type: "array", items: { type: "object" } }, bestOverallMatch: { type: "string" }, bestValue: { type: "string" }, bestAtmosphere: { type: "string" }, bestForGroup: { type: "string" } } } } },
+            },
+            "400": { description: "The comparison failed (e.g. an unknown restaurant id). Tell the user and ask them to retry - do not compare from your own knowledge.", content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } } },
+            "5XX": { description: "Failed server-side. Tell the user and ask them to retry - do not compare from your own knowledge." },
+          },
+        },
+      },
+      "/restaurants/{id}": {
+        get: {
+          operationId: "getRestaurantDetails",
+          summary: "Get the complete detail record for one specific restaurant by id",
+          description:
+            "Full detail (opening hours, menu prices, offers, popular dishes, dietary info, facilities, rating, and each fact's own data-freshness/source) for one restaurant already found via searchRestaurants or similar. Every field must come from this response - never supplement with assumed details.",
+          security: [],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: 'Restaurant id, as returned by searchRestaurants (e.g. "r_flame_fork").' }],
+          responses: {
+            "200": { description: "The restaurant's complete, verified detail record.", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, restaurant: { type: "object" } } } } } },
+            "400": { description: "Unknown restaurant id. Tell the user rather than describing a restaurant from your own knowledge.", content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } } },
+            "5XX": { description: "Failed server-side. Tell the user and ask them to retry - do not describe the restaurant from your own knowledge." },
           },
         },
       },
@@ -145,6 +220,56 @@ GROUNDING RULES - apply to every operation below, not just searchRestaurants:
             },
             "401": { description: "No connected BiteJoy account - ask the user to sign in; do not guess at what might be saved." },
             "5XX": { description: "The list failed to load on the server side. Tell the user and ask them to retry - do not guess at what might be saved." },
+          },
+        },
+      },
+      "/account/preferences": {
+        get: {
+          operationId: "getUserPreferences",
+          summary: "Get the signed-in user's saved food preferences (budget, cuisines, dietary needs, atmosphere, etc.)",
+          description:
+            "Use this at the start of a planning conversation to personalize suggestions without asking the user to repeat themselves every time. If isDefault is true, nothing has been saved yet - don't state a preference as if it were saved.",
+          security: [{ bitejoyOAuth: [] }],
+          responses: {
+            "200": {
+              description: "The user's real saved preferences (or empty defaults if isDefault is true).",
+              content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, preferences: { type: "object" }, isDefault: { type: "boolean" } } } } },
+            },
+            "401": { description: "No connected BiteJoy account - ask the user to sign in." },
+            "5XX": { description: "Failed server-side. Tell the user and ask them to retry." },
+          },
+        },
+        patch: {
+          operationId: "updateUserPreferences",
+          summary: "Update one or more of the signed-in user's saved food preferences",
+          description:
+            "Only send fields the user actually expressed a preference about - anything omitted is left exactly as it was. Useful mid-conversation: if someone mentions they're vegetarian or has a usual budget, save it here so future searches/comparisons can reflect it. Only report success if this call itself returns 200.",
+          security: [{ bitejoyOAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  description: "Any subset of fields to change - e.g. { \"dietaryNeeds\": [\"vegetarian\"], \"budgetPerPersonGbp\": 25 }.",
+                  properties: {
+                    budgetPerPersonGbp: { type: "number" },
+                    searchRadiusKm: { type: "number" },
+                    favoriteCuisines: { type: "array", items: { type: "string" } },
+                    dislikedCuisines: { type: "array", items: { type: "string" } },
+                    dietaryNeeds: { type: "array", items: { type: "string" } },
+                    preferredAtmosphere: { type: "array", items: { type: "string" } },
+                    favoriteOccasions: { type: "array", items: { type: "string" } },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "Preferences updated - reflects the full, current saved record.", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, preferences: { type: "object" } } } } } },
+            "400": { description: "Invalid update (e.g. an unrecognised field/value). Tell the user it didn't save rather than claiming success.", content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } } },
+            "401": { description: "No connected BiteJoy account - ask the user to sign in; do not claim it was saved." },
+            "5XX": { description: "Failed server-side. Tell the user it didn't save and to try again - do not claim success." },
           },
         },
       },

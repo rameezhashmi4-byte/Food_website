@@ -1,10 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
-import { PreferencesPatchSchema, UserPreferencesSchema } from "../repository/types.js";
+import { PreferencesPatchSchema, UserPreferencesSchema, type PreferencesPatch } from "../repository/types.js";
 import { requireAuthedContext } from "../lib/authGuard.js";
 import { toToolResult } from "../lib/errors.js";
 
 const OutputShape = { preferences: UserPreferencesSchema };
+
+/** Same logic the REST layer (rest/routes.ts) calls - see tools/searchRestaurants.ts's equivalent comment. */
+export async function performUpdateUserPreferences(ctx: AppContext, patch: PreferencesPatch): Promise<CallToolResult> {
+  const { userId, repository } = requireAuthedContext(ctx);
+  const preferences = await repository.updatePreferences(userId, patch);
+  await repository.recordActivity(userId, "preferences_updated");
+
+  return {
+    content: [{ type: "text", text: "Your preferences are updated." }],
+    structuredContent: { preferences },
+  };
+}
 
 export function registerUpdateUserPreferences(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -26,16 +39,6 @@ export function registerUpdateUserPreferences(server: McpServer, ctx: AppContext
         "openai/toolInvocation/invoked": "Preferences updated.",
       },
     },
-    async (patch) =>
-      toToolResult(async () => {
-        const { userId, repository } = requireAuthedContext(ctx);
-        const preferences = await repository.updatePreferences(userId, patch);
-        await repository.recordActivity(userId, "preferences_updated");
-
-        return {
-          content: [{ type: "text", text: "Your preferences are updated." }],
-          structuredContent: { preferences },
-        };
-      }),
+    async (patch) => toToolResult(() => performUpdateUserPreferences(ctx, patch)),
   );
 }

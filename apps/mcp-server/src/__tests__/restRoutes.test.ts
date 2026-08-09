@@ -32,7 +32,7 @@ describe("REST/OpenAPI layer", () => {
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
-  it("serves an OpenAPI 3.1 document describing all four routes", async () => {
+  it("serves an OpenAPI 3.1 document describing all nine routes", async () => {
     const res = await fetch(`${baseUrl}/openapi.json`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -43,7 +43,16 @@ describe("REST/OpenAPI layer", () => {
     };
     expect(body.openapi).toBe("3.1.0");
     expect(body.servers[0]?.url).toBe(baseUrl);
-    expect(Object.keys(body.paths).sort()).toEqual(["/account/saved", "/restaurants/search", "/restaurants/{id}/save"]);
+    expect(Object.keys(body.paths).sort()).toEqual([
+      "/account/preferences",
+      "/account/saved",
+      "/restaurants/compare",
+      "/restaurants/hidden-gems",
+      "/restaurants/offers",
+      "/restaurants/search",
+      "/restaurants/{id}",
+      "/restaurants/{id}/save",
+    ]);
     // Regression check: the GPT Builder's real import validator rejected
     // this schema live with "In components section, schemas subsection is
     // not an object" when this key was missing entirely.
@@ -94,6 +103,61 @@ describe("REST/OpenAPI layer", () => {
 
   it("GET /account/saved with no Authorization header is a real 401", async () => {
     const res = await fetch(`${baseUrl}/account/saved`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /restaurants/hidden-gems works publicly and returns real recommendations", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/hidden-gems?location=Croydon`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { recommendations: unknown[] };
+    expect(Array.isArray(body.recommendations)).toBe(true);
+  });
+
+  it("GET /restaurants/offers works publicly and returns real recommendations", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/offers?location=Croydon`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { recommendations: unknown[] };
+    expect(Array.isArray(body.recommendations)).toBe(true);
+  });
+
+  it("GET /restaurants/compare requires at least 2 ids", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/compare?location=Croydon&ids=r_flame_fork`);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("2-4");
+  });
+
+  it("GET /restaurants/compare works publicly with 2+ real ids", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/compare?location=Croydon&ids=r_flame_fork,r_spice_junction`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: unknown[] };
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items).toHaveLength(2);
+  });
+
+  it("GET /restaurants/{id} works publicly for a real id", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/r_flame_fork`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { restaurant: { name: string } };
+    expect(body.restaurant.name).toBeTruthy();
+  });
+
+  it("GET /restaurants/{id} for an unknown id is a clean 400, not a crash", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/does-not-exist`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /account/preferences with no Authorization header is a real 401", async () => {
+    const res = await fetch(`${baseUrl}/account/preferences`);
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH /account/preferences with no Authorization header is a real 401", async () => {
+    const res = await fetch(`${baseUrl}/account/preferences`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ budgetPerPersonGbp: 30 }),
+    });
     expect(res.status).toBe(401);
   });
 });

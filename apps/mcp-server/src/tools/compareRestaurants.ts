@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
-import { SearchCriteriaInputShape } from "../lib/schemas.js";
+import { SearchCriteriaInputShape, type SearchCriteriaInput } from "../lib/schemas.js";
 import { resolveCriteria } from "../lib/resolveCriteria.js";
 import { buildComparisonEntries, computeAwards, ComparisonEntrySchema } from "../lib/comparison.js";
 import { compareRestaurantsWithAI } from "../ai/openaiClient.js";
@@ -26,6 +27,36 @@ const OutputShape = {
   bestForGroup: z.string().optional(),
 };
 
+/** Same logic the REST layer (rest/routes.ts) calls - see tools/searchRestaurants.ts's equivalent comment. */
+export async function performCompareRestaurants(
+  ctx: AppContext,
+  input: { restaurantIds: string[] } & SearchCriteriaInput,
+): Promise<CallToolResult> {
+  const { restaurantIds, ...criteriaInput } = input;
+  const uniqueIds = Array.from(new Set(restaurantIds));
+  const { criteria, locationLabel } = resolveCriteria(criteriaInput);
+
+  const restaurants = await Promise.all(uniqueIds.map((id) => ctx.provider.getRestaurantById(id)));
+  const missing = uniqueIds.filter((_, i) => !restaurants[i]);
+  if (missing.length > 0) {
+    throw new ToolInputError(`I couldn't find ${missing.length > 1 ? "these restaurants" : "this restaurant"}: ${missing.join(", ")}.`);
+  }
+
+  const found = restaurants.filter((r): r is NonNullable<typeof r> => Boolean(r));
+  const now = criteria.dateTime ? new Date(criteria.dateTime) : new Date();
+  const entries = buildComparisonEntries(found, criteria, now);
+  const awards = computeAwards(entries, criteria);
+
+  const output = { locationLabel, items: entries, ...awards };
+  const deterministicText = buildComparisonText(output);
+  const aiText = await compareRestaurantsWithAI(output);
+
+  return {
+    content: [{ type: "text", text: aiText ?? deterministicText }],
+    structuredContent: output,
+  };
+}
+
 export function registerCompareRestaurants(server: McpServer, ctx: AppContext): void {
   server.registerTool(
     "compare_restaurants",
@@ -43,31 +74,7 @@ export function registerCompareRestaurants(server: McpServer, ctx: AppContext): 
         "openai/toolInvocation/invoked": "Here's the comparison.",
       },
     },
-    async ({ restaurantIds, ...criteriaInput }) =>
-      toToolResult(async () => {
-        const uniqueIds = Array.from(new Set(restaurantIds));
-        const { criteria, locationLabel } = resolveCriteria(criteriaInput);
-
-        const restaurants = await Promise.all(uniqueIds.map((id) => ctx.provider.getRestaurantById(id)));
-        const missing = uniqueIds.filter((_, i) => !restaurants[i]);
-        if (missing.length > 0) {
-          throw new ToolInputError(`I couldn't find ${missing.length > 1 ? "these restaurants" : "this restaurant"}: ${missing.join(", ")}.`);
-        }
-
-        const found = restaurants.filter((r): r is NonNullable<typeof r> => Boolean(r));
-        const now = criteria.dateTime ? new Date(criteria.dateTime) : new Date();
-        const entries = buildComparisonEntries(found, criteria, now);
-        const awards = computeAwards(entries, criteria);
-
-        const output = { locationLabel, items: entries, ...awards };
-        const deterministicText = buildComparisonText(output);
-        const aiText = await compareRestaurantsWithAI(output);
-
-        return {
-          content: [{ type: "text", text: aiText ?? deterministicText }],
-          structuredContent: output,
-        };
-      }),
+    async (input) => toToolResult(() => performCompareRestaurants(ctx, input)),
   );
 }
 

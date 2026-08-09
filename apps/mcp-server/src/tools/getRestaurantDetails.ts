@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext } from "../context.js";
 import { RestaurantDetailViewSchema, toDetailView } from "../lib/detailView.js";
 import { buildDetailSummary } from "../lib/personality.js";
@@ -12,6 +13,20 @@ const InputShape = {
 const OutputShape = {
   restaurant: RestaurantDetailViewSchema,
 };
+
+/** Same logic the REST layer (rest/routes.ts) calls - see tools/searchRestaurants.ts's equivalent comment. */
+export async function performGetRestaurantDetails(ctx: AppContext, input: { restaurantId: string }): Promise<CallToolResult> {
+  const restaurant = await ctx.provider.getRestaurantById(input.restaurantId);
+  if (!restaurant) {
+    throw new ToolInputError(`I couldn't find a restaurant with id "${input.restaurantId}". Try searching first to get a valid id.`);
+  }
+
+  const detail = toDetailView(restaurant);
+  return {
+    content: [{ type: "text", text: buildDetailSummary(detail) }],
+    structuredContent: { restaurant: detail },
+  };
+}
 
 export function registerGetRestaurantDetails(server: McpServer, ctx: AppContext): void {
   server.registerTool(
@@ -28,18 +43,6 @@ export function registerGetRestaurantDetails(server: McpServer, ctx: AppContext)
         "openai/toolInvocation/invoked": "Here you go.",
       },
     },
-    async ({ restaurantId }) =>
-      toToolResult(async () => {
-        const restaurant = await ctx.provider.getRestaurantById(restaurantId);
-        if (!restaurant) {
-          throw new ToolInputError(`I couldn't find a restaurant with id "${restaurantId}". Try searching first to get a valid id.`);
-        }
-
-        const detail = toDetailView(restaurant);
-        return {
-          content: [{ type: "text", text: buildDetailSummary(detail) }],
-          structuredContent: { restaurant: detail },
-        };
-      }),
+    async (input) => toToolResult(() => performGetRestaurantDetails(ctx, input)),
   );
 }
