@@ -24,8 +24,14 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
     openapi: "3.1.0",
     info: {
       title: "BiteJoy",
-      description:
-        "Find restaurant recommendations and manage a signed-in user's saved list. Search is public; saving, removing and listing saved restaurants require a connected BiteJoy account.",
+      description: `Find restaurant recommendations and manage a signed-in user's saved list. Search is public; saving, removing and listing saved restaurants require a connected BiteJoy account.
+
+GROUNDING RULES - apply to every operation below, not just searchRestaurants:
+1. Restaurant facts (name, address, opening status, closing time, price, distance, cuisine, offers, rating, availability) MUST come only from a successful response from these operations. Never invent, infer, recall, or supplement a restaurant or a fact about one from your own training knowledge.
+2. Before mentioning any restaurant, confirm its id/name is actually present in the current successful response for THIS search. If it isn't there, don't mention it.
+3. If a call to any of these operations errors, times out, or returns a non-2xx status, tell the user the restaurant search/action failed and ask them to try again. Do not fall back to recommending restaurants from your own knowledge, and do not imply the call succeeded.
+4. If searchRestaurants returns zero results, say plainly that nothing matched - don't substitute alternatives you know about from elsewhere.
+5. Never state a restaurant is "open now", has a particular closing time, or has an available offer unless that exact response explicitly says so - don't infer it from a place's general reputation or typical hours.`,
       version: "1.0.0",
     },
     servers: [{ url: baseUrl }],
@@ -34,6 +40,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
         get: {
           operationId: "searchRestaurants",
           summary: "Find restaurant recommendations for a location, time and set of preferences",
+          description:
+            "Returns the ONLY restaurants you may recommend for this request - a curated, already-scored list, not a generic listing. Every fact in the response (price, rating, opening status, offers, distance) is verified as of the response's own data-freshness fields. Do not add, substitute, or supplement with restaurants from your own knowledge, even ones you're confident are real and nearby - if it's not in this response, don't mention it. On any error or empty result, see this schema's top-level description for exactly what to tell the user.",
           security: [],
           parameters: [
             { name: "location", in: "query", required: true, schema: { type: "string" }, description: 'Area, postcode or place name, e.g. "Croydon".' },
@@ -47,7 +55,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
           ],
           responses: {
             "200": {
-              description: "Recommendations found",
+              description:
+                "Recommendations found. `recommendations` (possibly empty) is the complete, exhaustive set of restaurants you may mention for this search - if it's empty, tell the user no matches were found rather than suggesting anything else.",
               content: {
                 "application/json": {
                   schema: {
@@ -62,7 +71,15 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
                 },
               },
             },
-            "400": { description: "Invalid or unrecognised input", content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } } },
+            "400": {
+              description:
+                "The search failed (e.g. an unrecognised location). Tell the user the search couldn't run and ask them to rephrase or try again - do not recommend any restaurant in this response.",
+              content: { "application/json": { schema: { type: "object", properties: { error: { type: "string" } } } } },
+            },
+            "5XX": {
+              description:
+                "The search failed on the server side. Tell the user the restaurant search is temporarily unavailable and ask them to retry shortly - do not recommend any restaurant from your own knowledge as a substitute.",
+            },
           },
         },
       },
@@ -70,6 +87,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
         post: {
           operationId: "saveRestaurant",
           summary: "Save a restaurant to the signed-in user's list",
+          description:
+            "The id MUST be one that came from a searchRestaurants response earlier in this conversation - never a restaurant id/name you're inferring or recalling from your own knowledge. Only report success if this call itself returns 200.",
           security: [{ bitejoyOAuth: [] }],
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: 'Restaurant id, as returned by searchRestaurants (e.g. "r_flame_fork").' }],
           requestBody: {
@@ -78,8 +97,9 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
           },
           responses: {
             "200": { description: "Saved", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, saved: { type: "object" } } } } } },
-            "401": { description: "No connected BiteJoy account" },
-            "400": { description: "Unknown restaurant id" },
+            "401": { description: "No connected BiteJoy account - ask the user to sign in; do not claim it was saved." },
+            "400": { description: "Unknown restaurant id - tell the user the save failed rather than claiming success." },
+            "5XX": { description: "The save failed on the server side. Tell the user it didn't save and to try again - do not claim success." },
           },
         },
         delete: {
@@ -89,7 +109,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "Removed", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, removed: { type: "boolean" } } } } } },
-            "401": { description: "No connected BiteJoy account" },
+            "401": { description: "No connected BiteJoy account - ask the user to sign in; do not claim it was removed." },
+            "5XX": { description: "The removal failed on the server side. Tell the user it didn't work and to try again - do not claim success." },
           },
         },
       },
@@ -97,6 +118,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
         get: {
           operationId: "getSavedRestaurants",
           summary: "List the signed-in user's saved restaurants",
+          description:
+            "Returns the user's real, current saved list - the complete set you may describe as \"saved\". Never supplement it with a restaurant you merely recall discussing earlier in the conversation; if it isn't in this response, it isn't currently saved.",
           security: [{ bitejoyOAuth: [] }],
           parameters: [
             { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 50 } },
@@ -104,7 +127,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
           ],
           responses: {
             "200": {
-              description: "Saved restaurants",
+              description:
+                "The complete, exhaustive list of saved restaurants for this page - if `items` is empty, tell the user they have nothing saved rather than guessing.",
               content: {
                 "application/json": {
                   schema: {
@@ -119,7 +143,8 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
                 },
               },
             },
-            "401": { description: "No connected BiteJoy account" },
+            "401": { description: "No connected BiteJoy account - ask the user to sign in; do not guess at what might be saved." },
+            "5XX": { description: "The list failed to load on the server side. Tell the user and ask them to retry - do not guess at what might be saved." },
           },
         },
       },
