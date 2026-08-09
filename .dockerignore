@@ -1,0 +1,17 @@
+node_modules/
+.venv/
+dist/
+build/
+.next/
+.env
+.env.local
+*.log
+coverage/
+.DS_Store
+.claude/
+.git/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+*.tsbuildinfo

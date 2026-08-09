@@ -1,0 +1,30 @@
+# Fly.io config for the BiteJoy MCP server (apps/mcp-server).
+# Not for apps/web - that goes on Vercel, see README.md.
+#
+# `app` below is a placeholder - Fly app names are globally unique, so
+# either run `fly launch` (which assigns/asks for a real one and rewrites
+# this file) or pick your own and edit it before `fly deploy`.
+app = "bitejoy-mcp-server-CHANGE-ME"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "apps/mcp-server/Dockerfile"
+  # No `context` set - defaults to the directory this file lives in (repo
+  # root), which the Dockerfile needs for the npm workspaces build. See
+  # apps/mcp-server/Dockerfile's header comment.
+
+[http_service]
+  internal_port = 3333
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "stop"
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Set these with `fly secrets set NAME=value` (never commit real values):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_PLACES_API_KEY, OPENAI_API_KEY,
+#   OPENAI_MODEL, BITEJOY_PROVIDER, MCP_PUBLIC_URL (set this to
+#   https://<your-app>.fly.dev/mcp once you know the real assigned domain)
