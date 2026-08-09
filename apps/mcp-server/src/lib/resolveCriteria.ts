@@ -1,4 +1,4 @@
-import { completeSearchCriteria, type PartialSearchCriteria, type RestaurantProvider, type SearchCriteria } from "@bitejoy/core";
+import { completeSearchCriteria, type PartialSearchCriteria, type ResolvedLocation, type RestaurantProvider, type SearchCriteria } from "@bitejoy/core";
 import { resolveLocationText } from "../nlu/gazetteer.js";
 import { resolveRelativeDateTime } from "../nlu/relativeDateTime.js";
 import { ToolInputError } from "./errors.js";
@@ -10,19 +10,52 @@ export interface ResolvedCriteria {
   assumptions: string[];
 }
 
+async function resolveInputLocation(provider: RestaurantProvider, input: SearchCriteriaInput): Promise<ResolvedLocation> {
+  if (input.lat !== undefined && input.lng !== undefined) {
+    // Real coordinates were handed to us directly (e.g. a device's GPS) -
+    // used as-is, no geocoding round trip. `location`, if also given
+    // alongside coordinates, is just a friendlier label than raw numbers.
+    return { coordinates: { lat: input.lat, lng: input.lng }, label: input.location ?? "your current location" };
+  }
+
+  if ((input.lat !== undefined) !== (input.lng !== undefined)) {
+    throw new ToolInputError("lat and lng must both be given together for a GPS-based search - a single coordinate on its own isn't enough.");
+  }
+
+  if (!input.location) {
+    throw new ToolInputError('A location is required - either a place name/postcode, or lat and lng for a "near me" search.');
+  }
+
+  const resolved = provider.resolveLocation ? await provider.resolveLocation(input.location) : resolveLocationText(input.location);
+  if (!resolved) {
+    throw new ToolInputError(
+      provider.resolveLocation
+        ? `I couldn't find a place matching "${input.location}" - try a more specific place name, address or postcode.`
+        : `I don't recognise "${input.location}" yet - BiteJoy's demo data currently covers Croydon and Streatham. Try an area like "Croydon" or "East Croydon".`,
+    );
+  }
+  return resolved;
+}
+
 /**
  * Turns a tool's loose, model-friendly input (free-text location, natural
  * date phrases) into the strict `SearchCriteria` the core scoring engine
  * requires. Every search-family tool routes through this, so location and
  * date resolution behave identically everywhere.
  *
- * Location resolution defers to the active `provider`: if it implements
- * `resolveLocation` (genuine geocoding, e.g. `GooglePlacesProvider`), that's
- * used and any worldwide location works. If not (the fixed-data
- * `FictionalRestaurantProvider`), this falls back to the small Croydon/
- * Streatham-only gazetteer that actually matches the demo dataset. This is
- * what makes `BITEJOY_PROVIDER=google_places` alone enough to unlock
- * international search - resolution is never hard-wired to the UK gazetteer.
+ * Location resolution has two paths, checked in order:
+ *
+ * 1. `lat`/`lng` given directly (e.g. from a device's real GPS, passed
+ *    straight through by the caller) - used as-is, no geocoding at all.
+ *    This is the accurate, fast path for a genuine "near me" search.
+ * 2. Free-text `location` - deferred to the active `provider`: if it
+ *    implements `resolveLocation` (genuine geocoding, e.g.
+ *    `GooglePlacesProvider`), that's used and any worldwide location/
+ *    postcode works. If not (the fixed-data `FictionalRestaurantProvider`),
+ *    this falls back to the small Croydon/Streatham-only gazetteer that
+ *    actually matches the demo dataset. This is what makes
+ *    `BITEJOY_PROVIDER=google_places` alone enough to unlock international
+ *    search - resolution is never hard-wired to the UK gazetteer.
  */
 export async function resolveCriteria(
   provider: RestaurantProvider,
@@ -31,16 +64,7 @@ export async function resolveCriteria(
 ): Promise<ResolvedCriteria> {
   const assumptions: string[] = [];
 
-  const location = provider.resolveLocation
-    ? await provider.resolveLocation(input.location)
-    : resolveLocationText(input.location);
-  if (!location) {
-    throw new ToolInputError(
-      provider.resolveLocation
-        ? `I couldn't find a place matching "${input.location}" - try a more specific place name, address or postcode.`
-        : `I don't recognise "${input.location}" yet - BiteJoy's demo data currently covers Croydon and Streatham. Try an area like "Croydon" or "East Croydon".`,
-    );
-  }
+  const location = await resolveInputLocation(provider, input);
 
   let dateTimeIso: string | undefined;
   if (input.dateTime) {

@@ -91,4 +91,31 @@ describe("resolveCriteria", () => {
       await expect(resolveCriteria(tokyo, { location: "Nowhereville" })).rejects.toThrow(ToolInputError);
     });
   });
+
+  describe("with GPS coordinates given directly", () => {
+    it("uses lat/lng as-is, skipping geocoding entirely - works even for a provider with no resolveLocation at all", async () => {
+      const { criteria, locationLabel } = await resolveCriteria(fictionalProvider, { lat: 51.3762, lng: -0.0982 });
+      expect(criteria.location).toEqual({ lat: 51.3762, lng: -0.0982 });
+      expect(locationLabel).toBe("your current location");
+    });
+
+    it("uses the given location string as a friendlier label when paired with coordinates", async () => {
+      const { locationLabel } = await resolveCriteria(fictionalProvider, { location: "near me", lat: 51.3762, lng: -0.0982 });
+      expect(locationLabel).toBe("near me");
+    });
+
+    it("prefers coordinates over a location string when both are given", async () => {
+      const { criteria } = await resolveCriteria(fictionalProvider, { location: "Croydon", lat: 1, lng: 2 });
+      expect(criteria.location).toEqual({ lat: 1, lng: 2 });
+    });
+
+    it("throws a ToolInputError when only one of lat/lng is given", async () => {
+      await expect(resolveCriteria(fictionalProvider, { lat: 51.3762 })).rejects.toThrow(ToolInputError);
+      await expect(resolveCriteria(fictionalProvider, { lng: -0.0982 })).rejects.toThrow(ToolInputError);
+    });
+
+    it("throws a ToolInputError when neither location nor lat/lng is given", async () => {
+      await expect(resolveCriteria(fictionalProvider, {})).rejects.toThrow(ToolInputError);
+    });
+  });
 });

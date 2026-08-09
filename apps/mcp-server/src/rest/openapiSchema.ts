@@ -21,7 +21,28 @@
  */
 /** Shared by searchRestaurants/findHiddenGems/findCurrentOffers/compareRestaurants - same underlying SearchCriteriaInput fields. */
 const CRITERIA_PARAMETERS = [
-  { name: "location", in: "query", required: true, schema: { type: "string" }, description: 'Area, postcode or place name, e.g. "Croydon".' },
+  {
+    name: "location",
+    in: "query",
+    required: false,
+    schema: { type: "string" },
+    description:
+      'Area, postcode or place name, anywhere in the world, e.g. "Croydon", "SW1A 1AA", "Paris", "Shibuya, Tokyo". Either this or both lat/lng are required - use lat/lng instead whenever real coordinates are available (e.g. the user shared their location), since it\'s more accurate for "near me" and skips a geocoding step.',
+  },
+  {
+    name: "lat",
+    in: "query",
+    required: false,
+    schema: { type: "number", minimum: -90, maximum: 90 },
+    description: 'Latitude for a "near me" search using real coordinates. Must be paired with lng. Preferred over location when available.',
+  },
+  {
+    name: "lng",
+    in: "query",
+    required: false,
+    schema: { type: "number", minimum: -180, maximum: 180 },
+    description: 'Longitude for a "near me" search using real coordinates. Must be paired with lat.',
+  },
   { name: "dateTime", in: "query", required: false, schema: { type: "string" }, description: 'ISO datetime, or a natural phrase like "tonight", "Friday 7pm".' },
   { name: "partySize", in: "query", required: false, schema: { type: "integer", minimum: 1 } },
   { name: "budgetPerPersonGbp", in: "query", required: false, schema: { type: "number" } },
@@ -36,7 +57,7 @@ export function buildOpenApiSchema(baseUrl: string, _supabaseUrl: string | undef
     openapi: "3.1.0",
     info: {
       title: "BiteJoy",
-      description: `Find restaurant recommendations and manage a signed-in user's saved list. Search is public; saving, removing and listing saved restaurants require a connected BiteJoy account.
+      description: `Find restaurant recommendations worldwide and manage a signed-in user's saved list. Search is public; saving, removing and listing saved restaurants require a connected BiteJoy account. Location can be a place name/postcode (any country) or, when available, real lat/lng coordinates for an accurate "near me" search - prefer coordinates over asking the user to type a place name if you already have their location.
 
 GROUNDING RULES - apply to every operation below, not just searchRestaurants:
 1. Restaurant facts (name, address, opening status, closing time, price, distance, cuisine, offers, rating, availability) MUST come only from a successful response from these operations. Never invent, infer, recall, or supplement a restaurant or a fact about one from your own training knowledge.

@@ -75,6 +75,14 @@ describe("REST/OpenAPI layer", () => {
     expect(body.error).toContain("location");
   });
 
+  it("GET /restaurants/search works with lat/lng instead of location - real GPS coordinates, no text geocoding", async () => {
+    const res = await fetch(`${baseUrl}/restaurants/search?lat=51.3762&lng=-0.0982`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { locationLabel: string; recommendations: unknown[] };
+    expect(body.locationLabel).toBe("your current location");
+    expect(Array.isArray(body.recommendations)).toBe(true);
+  });
+
   it("GET /restaurants/search with a location the fictional dataset doesn't cover is a clean 400 with a helpful message, not a 500 (regression: performSearchRestaurants's thrown ToolInputError wasn't being caught by this route)", async () => {
     const res = await fetch(`${baseUrl}/restaurants/search?location=SM5%201NL`);
     expect(res.status).toBe(400);

@@ -67,9 +67,15 @@ function sendUnexpectedError(res: Response, error: unknown, route: string): void
 }
 
 /** Shared by search/compare/hidden-gems/offers - the same SearchCriteriaInput fields, read from query params. */
+// `location` is optional here on purpose - a GPS-based "near me" search
+// gives lat/lng instead. performSearchRestaurants (via resolveCriteria)
+// throws a clean ToolInputError if neither was given, which toToolResult
+// turns into the right 400 - no need to duplicate that check here.
 function parseCriteriaQuery(q: Request["query"]): SearchCriteriaInput {
   return {
-    location: typeof q.location === "string" ? q.location : "",
+    location: typeof q.location === "string" && q.location.length > 0 ? q.location : undefined,
+    lat: q.lat !== undefined ? Number(q.lat) : undefined,
+    lng: q.lng !== undefined ? Number(q.lng) : undefined,
     radiusKm: q.radiusKm ? Number(q.radiusKm) : undefined,
     dateTime: typeof q.dateTime === "string" ? q.dateTime : undefined,
     partySize: q.partySize ? Number(q.partySize) : undefined,
@@ -87,10 +93,6 @@ export function createRestRouter(): Router {
   router.get("/restaurants/search", async (req, res) => {
     try {
       const input = parseCriteriaQuery(req.query);
-      if (!input.location) {
-        res.status(400).json({ error: 'Query parameter "location" is required, e.g. "Croydon".' });
-        return;
-      }
       const ctx = createAppContext();
       // toToolResult here matters, not just style: performSearchRestaurants
       // throws ToolInputError directly (e.g. an unrecognised location) -
@@ -108,10 +110,6 @@ export function createRestRouter(): Router {
   router.get("/restaurants/hidden-gems", async (req, res) => {
     try {
       const input = parseCriteriaQuery(req.query);
-      if (!input.location) {
-        res.status(400).json({ error: 'Query parameter "location" is required, e.g. "Croydon".' });
-        return;
-      }
       const ctx = createAppContext();
       const result = await toToolResult(() => performFindHiddenGems(ctx, input));
       sendToolResult(res, result);
@@ -123,10 +121,6 @@ export function createRestRouter(): Router {
   router.get("/restaurants/offers", async (req, res) => {
     try {
       const input = parseCriteriaQuery(req.query);
-      if (!input.location) {
-        res.status(400).json({ error: 'Query parameter "location" is required, e.g. "Croydon".' });
-        return;
-      }
       const ctx = createAppContext();
       const result = await toToolResult(() => performFindCurrentOffers(ctx, input));
       sendToolResult(res, result);
@@ -148,10 +142,6 @@ export function createRestRouter(): Router {
         return;
       }
       const criteriaInput = parseCriteriaQuery(q);
-      if (!criteriaInput.location) {
-        res.status(400).json({ error: 'Query parameter "location" is required, e.g. "Croydon" - use the same one from the original search.' });
-        return;
-      }
       const ctx = createAppContext();
       const result = await toToolResult(() => performCompareRestaurants(ctx, { restaurantIds, ...criteriaInput }));
       sendToolResult(res, result);

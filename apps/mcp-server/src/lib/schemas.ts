@@ -14,7 +14,22 @@ export const SearchCriteriaInputShape = {
   location: z
     .string()
     .min(1)
-    .describe('Area, postcode or place name, e.g. "Croydon" or "East Croydon". Required.'),
+    .optional()
+    .describe(
+      'Area, postcode or place name, e.g. "Croydon", "SW1A 1AA", "Paris", "Shibuya, Tokyo" - any place on Earth. Either this or both lat/lng must be given.',
+    ),
+  lat: z
+    .number()
+    .min(-90)
+    .max(90)
+    .optional()
+    .describe('Latitude for a "near me"/current-location search, e.g. from the user\'s device GPS. Must be paired with lng. Skips text geocoding entirely - use this instead of location when real coordinates are available.'),
+  lng: z
+    .number()
+    .min(-180)
+    .max(180)
+    .optional()
+    .describe("Longitude for a \"near me\"/current-location search. Must be paired with lat."),
   radiusKm: z.number().positive().max(50).optional().describe("Search radius in kilometres. Defaults to a sensible local radius."),
   dateTime: z
     .string()
