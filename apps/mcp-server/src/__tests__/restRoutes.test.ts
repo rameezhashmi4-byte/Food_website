@@ -32,6 +32,16 @@ describe("REST/OpenAPI layer", () => {
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
+  it("serves a plain, publicly-crawlable privacy policy page with no noindex/X-Robots-Tag header", async () => {
+    const res = await fetch(`${baseUrl}/privacy`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-robots-tag")).toBeNull();
+    const body = await res.text();
+    expect(body).toContain("Privacy Policy");
+    expect(body).toContain("mega_671@hotmail.co.uk");
+    expect(body).toContain("23. Contact");
+  });
+
   it("serves an OpenAPI 3.1 document describing all nine routes", async () => {
     const res = await fetch(`${baseUrl}/openapi.json`);
     expect(res.status).toBe(200);

@@ -6,6 +6,7 @@ import { AuthError, extractBearerToken, verifyAccessToken, type VerifiedAuth } f
 import { createRestRouter } from "./rest/routes.js";
 import { createOAuthProxyRouter } from "./rest/oauthProxy.js";
 import { buildOpenApiSchema } from "./rest/openapiSchema.js";
+import { PRIVACY_POLICY_HTML } from "./rest/privacyPage.js";
 
 const DEFAULT_PORT = 3333;
 
@@ -55,6 +56,14 @@ export function createHttpApp(): Express {
 
   app.get("/healthz", (_req, res) => {
     res.json({ ok: true, server: SERVER_NAME });
+  });
+
+  // Plain, publicly-crawlable privacy policy page - required for ChatGPT
+  // Store publishing (see rest/privacyPage.ts's header comment for why this
+  // isn't served via a Claude Artifact or apps/web instead). Deliberately
+  // no X-Robots-Tag/noindex - this must be indexable to pass OpenAI's check.
+  app.get("/privacy", (_req, res) => {
+    res.type("html").send(PRIVACY_POLICY_HTML);
   });
 
   // RFC 9728 Protected Resource Metadata: tells an MCP/OAuth client which
